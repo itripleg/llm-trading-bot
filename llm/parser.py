@@ -27,15 +27,15 @@ class TradeSignal(str, Enum):
 
 class ExitPlan(BaseModel):
     """Exit plan for a trade."""
-    profit_target: float = Field(description="Price target for taking profit")
-    stop_loss: float = Field(description="Stop loss price")
-    invalidation_condition: str = Field(description="Condition that invalidates the trade thesis")
+    profit_target: Optional[float] = Field(default=None, description="Price target for taking profit")
+    stop_loss: Optional[float] = Field(default=None, description="Stop loss price")
+    invalidation_condition: Optional[str] = Field(default=None, description="Condition that invalidates the trade thesis")
 
     @field_validator("profit_target", "stop_loss")
     @classmethod
-    def validate_positive(cls, v: float) -> float:
-        """Ensure prices are positive."""
-        if v < 0:
+    def validate_positive(cls, v: Optional[float]) -> Optional[float]:
+        """Ensure prices are positive when provided."""
+        if v is not None and v < 0:
             raise ValueError("Price must be positive")
         return v
 
