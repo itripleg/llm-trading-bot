@@ -323,4 +323,57 @@ Use these section headers as you progress:
 
 ---
 
-**Next Entry**: Phase 2 - LLM Integration →
+## Phase 2: LLM Integration - In Progress
+
+### 2025-11-13 - Phase 2, Task 2.1: Prompt Engineering
+**Issue**: Create prompt templates for LLM trading decisions
+**Solution**: Created llm/prompts.py with PromptBuilder class based on Alpha Arena methodology
+
+**Changes**:
+- 🟢 Created llm/prompts.py with comprehensive prompt generation
+- 🟢 Implemented SYSTEM_PROMPT with role, rules, and output format
+- 🟢 Implemented format_market_data() for each asset:
+  - Current prices and indicators
+  - Intraday series (3-min intervals, last 10 candles)
+  - Longer-term context (4-hour timeframe)
+  - Funding rates and open interest
+- 🟢 Implemented format_account_state():
+  - Available cash, total value
+  - Current positions with PnL
+  - Sharpe ratio and total returns
+- 🟢 Implemented build_trading_prompt() to combine all data
+- 🟢 Helper functions: get_system_prompt(), build_user_prompt()
+
+**Prompt Structure**:
+- System prompt: Trading rules, risk management, output format (1712 chars)
+- User prompt: Market data (all assets) + Account state
+- Data ordering: OLDEST → NEWEST (explicitly stated to avoid LLM confusion)
+- Output format: JSON with coin, signal, quantity_usd, leverage, confidence, exit_plan, justification
+
+**Key Features**:
+- Based on Alpha Arena's proven prompt structure
+- Explicit data ordering to prevent misreading
+- Clear JSON output specification
+- Risk management rules embedded in system prompt
+- Handles multiple assets in single prompt
+- Flexible timeframe support (3-min intraday, 4-hour context)
+
+**Files Created**:
+- llm/prompts.py (400+ lines)
+
+**Testing**:
+- Prompt builder loads successfully
+- System prompt: 1712 characters
+- Generates valid prompt structure
+- Will test with Claude API in Task 2.2
+
+**Notes**:
+- Prompt follows Alpha Arena format exactly
+- Emphasizes OLDEST → NEWEST ordering (critical for LLM understanding)
+- Exit plan includes profit target, stop loss, invalidation condition
+- Confidence score required (0.0 to 1.0)
+- Ready for Claude client integration
+
+---
+
+**Next Entry**: Phase 2 Task 2.2 - LLM client →
