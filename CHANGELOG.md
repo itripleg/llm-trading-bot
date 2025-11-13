@@ -376,4 +376,57 @@ Use these section headers as you progress:
 
 ---
 
-**Next Entry**: Phase 2 Task 2.2 - LLM client →
+### 2025-11-13 - Phase 2, Task 2.2: LLM Client
+**Issue**: Implement Anthropic Claude API client for trading decisions
+**Solution**: Created llm/client.py with ClaudeClient class including retry logic and error handling
+
+**Changes**:
+- 🟢 Created llm/client.py with ClaudeClient class
+- 🟢 Implemented get_trading_decision() with full error handling
+- 🟢 Added retry logic using tenacity:
+  - Exponential backoff (4s to 60s)
+  - Max 5 attempts
+  - Retries on RateLimitError and APIConnectionError
+  - Logs retry attempts
+- 🟢 Implemented test_connection() for API validation
+- 🟢 Comprehensive logging (INFO, DEBUG, ERROR levels)
+- 🟢 Token usage tracking
+- 🟢 Response timing measurements
+- 🟢 Helper function: get_claude_client()
+
+**Configuration**:
+- Default model: claude-sonnet-4-5-20250929 (latest Sonnet 4.5)
+- Max tokens: 2048
+- Temperature: 1.0 (full creativity for trading decisions)
+- API key from settings (ANTHROPIC_API_KEY)
+
+**Error Handling**:
+- RateLimitError: Automatic retry with exponential backoff
+- APIConnectionError: Automatic retry with backoff
+- APIError: Log and return None (no retry)
+- General exceptions: Log full traceback, return None
+
+**Logging**:
+- Request: Model, prompt lengths, timestamp
+- Response: Length, preview, elapsed time, token usage
+- Errors: Full details with traceback
+- Retries: Warning logs before each retry
+
+**Files Created**:
+- llm/client.py (230 lines)
+
+**Testing**:
+- Client class loads successfully
+- Will test with real API key when configured
+- Test script included in module
+
+**Notes**:
+- Requires ANTHROPIC_API_KEY in .env for operation
+- Uses Anthropic Python SDK (anthropic package)
+- Retry logic prevents intermittent failures
+- All prompts and responses logged for debugging
+- Ready for parser integration (Task 2.3)
+
+---
+
+**Next Entry**: Phase 2 Task 2.3 - Response parser →
