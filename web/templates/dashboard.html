@@ -39,7 +39,24 @@
 
         <!-- Latest Decision - Main Focus -->
         <section class="latest-decision" id="latest-decision-section">
-            <h2>Latest Analysis</h2>
+            <div class="section-header">
+                <h2>Latest Analysis</h2>
+                <div class="decision-nav" id="decision-nav" style="display: none;">
+                    <button class="nav-btn" id="prev-btn" title="Previous decision">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"/>
+                        </svg>
+                        Previous
+                    </button>
+                    <span class="nav-indicator" id="nav-indicator">1 of 1</span>
+                    <button class="nav-btn" id="next-btn" title="Next decision">
+                        Next
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
             <div id="latest-decision-card">
                 <div class="no-data-card">No decisions yet. Run test_real_data.py to analyze market conditions.</div>
             </div>
@@ -81,6 +98,7 @@
 
         let currentFilter = 'all';
         let allDecisions = [];
+        let currentDecisionIndex = 0;
 
         // Format currency
         function formatCurrency(value) {
@@ -267,8 +285,66 @@
                 `;
             }
 
+            // Raw data button and collapsible section
+            const rawDataId = `raw-data-${decision.id}`;
+            const rawData = {
+                id: decision.id,
+                timestamp: decision.timestamp,
+                coin: decision.coin,
+                signal: decision.signal,
+                quantity_usd: decision.quantity_usd,
+                leverage: decision.leverage,
+                confidence: decision.confidence,
+                exit_plan: {
+                    profit_target: decision.profit_target,
+                    stop_loss: decision.stop_loss,
+                    invalidation_condition: decision.invalidation_condition
+                },
+                justification: decision.justification
+            };
+
+            html += `
+                <div class="raw-data-section">
+                    <button class="raw-data-btn" onclick="toggleRawData('${rawDataId}')">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M5.854 4.646a.5.5 0 1 0-.708.708L8.293 8.5l-3.147 3.146a.5.5 0 0 0 .708.708l3.5-3.5a.5.5 0 0 0 0-.708l-3.5-3.5z"/>
+                            <path d="M4.5 1a.5.5 0 0 0-.5.5v13a.5.5 0 0 0 .5.5h7a.5.5 0 0 0 .5-.5v-13a.5.5 0 0 0-.5-.5h-7zm0-1h7A1.5 1.5 0 0 1 13 1.5v13a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 3 14.5v-13A1.5 1.5 0 0 1 4.5 0z"/>
+                        </svg>
+                        View Raw Data
+                    </button>
+                    <div class="raw-data-content" id="${rawDataId}" style="display: none;">
+                        <pre><code>${JSON.stringify(rawData, null, 2)}</code></pre>
+                    </div>
+                </div>
+            `;
+
             html += `</div>`;
             return html;
+        }
+
+        // Toggle raw data visibility
+        function toggleRawData(elementId) {
+            const element = document.getElementById(elementId);
+            const button = element.previousElementSibling;
+
+            if (element.style.display === 'none') {
+                element.style.display = 'block';
+                button.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M7.247 11.14L2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z"/>
+                    </svg>
+                    Hide Raw Data
+                `;
+            } else {
+                element.style.display = 'none';
+                button.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M5.854 4.646a.5.5 0 1 0-.708.708L8.293 8.5l-3.147 3.146a.5.5 0 0 0 .708.708l3.5-3.5a.5.5 0 0 0 0-.708l-3.5-3.5z"/>
+                        <path d="M4.5 1a.5.5 0 0 0-.5.5v13a.5.5 0 0 0 .5.5h7a.5.5 0 0 0 .5-.5v-13a.5.5 0 0 0-.5-.5h-7zm0-1h7A1.5 1.5 0 0 1 13 1.5v13a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 3 14.5v-13A1.5 1.5 0 0 1 4.5 0z"/>
+                    </svg>
+                    View Raw Data
+                `;
+            }
         }
 
         // Update account stats
@@ -315,18 +391,57 @@
                     // Update total decisions count
                     document.getElementById('total-decisions').textContent = allDecisions.length;
 
-                    // Show latest decision
-                    const latestDecision = allDecisions[0];
-                    document.getElementById('latest-decision-card').innerHTML = createDecisionCard(latestDecision, true);
+                    // Show navigation controls if there are multiple decisions
+                    const navControls = document.getElementById('decision-nav');
+                    if (allDecisions.length > 1) {
+                        navControls.style.display = 'flex';
+                    } else {
+                        navControls.style.display = 'none';
+                    }
+
+                    // Reset to first decision on new data load
+                    currentDecisionIndex = 0;
+
+                    // Show current decision
+                    showDecisionAtIndex(currentDecisionIndex);
 
                     // Show decision history (skip first one since it's shown as latest)
                     updateDecisionHistory();
                 } else {
                     document.getElementById('total-decisions').textContent = '0';
+                    document.getElementById('decision-nav').style.display = 'none';
                 }
             } catch (error) {
                 console.error('Error fetching decisions:', error);
             }
+        }
+
+        // Show decision at specific index
+        function showDecisionAtIndex(index) {
+            if (index < 0 || index >= allDecisions.length) return;
+
+            currentDecisionIndex = index;
+            const decision = allDecisions[index];
+
+            // Update the decision card
+            document.getElementById('latest-decision-card').innerHTML = createDecisionCard(decision, true);
+
+            // Update navigation controls
+            updateNavigationControls();
+        }
+
+        // Update navigation controls state
+        function updateNavigationControls() {
+            const prevBtn = document.getElementById('prev-btn');
+            const nextBtn = document.getElementById('next-btn');
+            const indicator = document.getElementById('nav-indicator');
+
+            // Update indicator
+            indicator.textContent = `${currentDecisionIndex + 1} of ${allDecisions.length}`;
+
+            // Disable/enable buttons based on position
+            prevBtn.disabled = currentDecisionIndex === 0;
+            nextBtn.disabled = currentDecisionIndex === allDecisions.length - 1;
         }
 
         // Update decision history with filtering
@@ -408,6 +523,19 @@
                 currentFilter = btn.dataset.filter;
                 updateDecisionHistory();
             });
+        });
+
+        // Navigation buttons
+        document.getElementById('prev-btn').addEventListener('click', () => {
+            if (currentDecisionIndex > 0) {
+                showDecisionAtIndex(currentDecisionIndex - 1);
+            }
+        });
+
+        document.getElementById('next-btn').addEventListener('click', () => {
+            if (currentDecisionIndex < allDecisions.length - 1) {
+                showDecisionAtIndex(currentDecisionIndex + 1);
+            }
         });
 
         // Initial load

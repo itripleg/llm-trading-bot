@@ -292,6 +292,112 @@ section h2 {
 }
 
 /* ============================================================================
+   NAVIGATION
+   ============================================================================ */
+
+.decision-nav {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: 2px solid #e1e8ed;
+    background: white;
+    color: #495057;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.85rem;
+    transition: all 0.3s ease;
+}
+
+.nav-btn:hover:not(:disabled) {
+    border-color: #667eea;
+    color: #667eea;
+    background: #f0f3ff;
+}
+
+.nav-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.nav-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.nav-indicator {
+    font-size: 0.9rem;
+    color: #6c757d;
+    font-weight: 600;
+    padding: 0 8px;
+}
+
+/* ============================================================================
+   RAW DATA SECTION
+   ============================================================================ */
+
+.raw-data-section {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #e1e8ed;
+}
+
+.raw-data-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border: 2px solid #e1e8ed;
+    background: white;
+    color: #6c757d;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.85rem;
+    transition: all 0.3s ease;
+    width: 100%;
+    justify-content: center;
+}
+
+.raw-data-btn:hover {
+    border-color: #667eea;
+    color: #667eea;
+    background: #f0f3ff;
+}
+
+.raw-data-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.raw-data-content {
+    margin-top: 12px;
+    background: #1e1e1e;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.raw-data-content pre {
+    margin: 0;
+    padding: 20px;
+    overflow-x: auto;
+}
+
+.raw-data-content code {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: #d4d4d4;
+}
+
+/* ============================================================================
    FILTERS
    ============================================================================ */
 
