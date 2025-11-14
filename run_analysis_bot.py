@@ -24,6 +24,7 @@ from llm.client import ClaudeClient
 from llm.prompts import get_system_prompt, build_user_prompt
 from llm.parser import parse_llm_response
 from trading.logger import TradingLogger
+from trading.account import TradingAccount
 from config.settings import settings
 
 # Control file for start/stop
@@ -55,13 +56,17 @@ def signal_handler(sig, frame):
     sys.exit(0)
 
 
-def run_analysis_cycle():
+def run_analysis_cycle(account: TradingAccount):
     """
     Run one analysis cycle:
     1. Fetch market data for all configured assets
     2. Calculate indicators
     3. Get Claude's decision
-    4. Log to database
+    4. Execute decision (paper trading)
+    5. Log to database
+
+    Args:
+        account: TradingAccount instance to track balance and positions
 
     Returns:
         bool: True if successful, False if error
@@ -105,7 +110,15 @@ def run_analysis_cycle():
         print(f"  MACD: {latest.get('macd', 0):.2f}")
         print(f"  EMA-20: ${latest.get('ema_20', 0):,.2f}")
 
-        # Build prompt
+        # Get current account state
+        current_prices = {coin: current_price}
+        account_summary = account.get_summary(current_prices)
+
+        print(f"\n[ACCOUNT] Balance: ${account_summary['balance']:.2f}, " +
+              f"Equity: ${account_summary['equity']:.2f}, " +
+              f"Positions: {account_summary['num_positions']}")
+
+        # Build prompt with real account state
         market_data = {
             coin: {
                 'current_price': current_price,
@@ -117,11 +130,11 @@ def run_analysis_cycle():
         }
 
         account_state = {
-            'available_cash': 10000.0,
-            'total_value': 10000.0,
-            'total_return_pct': 0.0,
-            'sharpe_ratio': 0.0,
-            'positions': [],
+            'available_cash': account.balance,
+            'total_value': account_summary['equity'],
+            'total_return_pct': account_summary['total_return_pct'],
+            'sharpe_ratio': 0.0,  # TODO: Calculate Sharpe ratio
+            'positions': account_summary['positions'],
         }
 
         system_prompt = get_system_prompt()
@@ -144,17 +157,59 @@ def run_analysis_cycle():
             print("  [FAIL] Could not parse response")
             return False
 
-        # Log to database
+        # Log decision to database
         logger.log_decision_from_trade_decision(decision, raw_response=response)
-        logger.log_account_state(
-            balance=account_state['available_cash'],
-            equity=account_state['total_value'],
-            unrealized_pnl=0.0,
-            realized_pnl=0.0,
-            sharpe_ratio=account_state.get('sharpe_ratio', 0.0),
-            num_positions=len(account_state['positions'])
-        )
-        logger.log_bot_status('running', f'Analysis cycle completed for {coin}')
+
+        # Execute decision (paper trading)
+        print(f"\n[EXECUTION] Executing decision: {decision.signal.value.upper()}")
+
+        if decision.signal.value == 'buy_to_enter':
+            # Open long position
+            if account.can_open_position(decision.quantity_usd):
+                account.open_position(
+                    coin=coin,
+                    side='long',
+                    entry_price=current_price,
+                    quantity_usd=decision.quantity_usd,
+                    leverage=decision.leverage
+                )
+            else:
+                print(f"  [REJECTED] Insufficient balance")
+                print(f"    Required: ${decision.quantity_usd:.2f}")
+                print(f"    Available: ${account.balance:.2f}")
+
+        elif decision.signal.value == 'sell_to_enter':
+            # Open short position
+            if account.can_open_position(decision.quantity_usd):
+                account.open_position(
+                    coin=coin,
+                    side='short',
+                    entry_price=current_price,
+                    quantity_usd=decision.quantity_usd,
+                    leverage=decision.leverage
+                )
+            else:
+                print(f"  [REJECTED] Insufficient balance")
+                print(f"    Required: ${decision.quantity_usd:.2f}")
+                print(f"    Available: ${account.balance:.2f}")
+
+        elif decision.signal.value == 'close':
+            # Close existing position
+            if coin in account.positions:
+                account.close_position(coin, exit_price=current_price)
+            else:
+                print(f"  [INFO] No position to close for {coin}")
+
+        elif decision.signal.value == 'hold':
+            # Just hold, update unrealized PnL
+            print(f"  [HOLD] No action taken")
+            if coin in account.positions:
+                unrealized_pnl = account.positions[coin].calculate_pnl(current_price)
+                print(f"    Current position unrealized PnL: ${unrealized_pnl:+.2f}")
+
+        # Save updated account state
+        account.save_state(current_prices)
+        logger.log_bot_status('running', f'Executed {decision.signal.value} for {coin}')
 
         # Display decision
         print("\n" + "-"*70)
@@ -188,15 +243,21 @@ def run_bot():
     global RUNNING
 
     print("="*70)
-    print("ALPHA ARENA MINI - ANALYSIS BOT")
+    print("ALPHA ARENA MINI - PAPER TRADING BOT")
     print("="*70)
-    print("\nThis bot continuously analyzes market data with Claude.")
-    print("No actual trading - just collecting decisions for analysis.")
+    print("\nThis bot trades with simulated money (paper trading).")
+    print("Claude makes decisions, bot executes them with fake balance.")
     print("\nControls:")
     print("  - Dashboard: http://localhost:5000")
     print("  - Ctrl+C: Stop the bot")
     print("  - Control file:", CONTROL_FILE)
     print("\n" + "="*70)
+
+    # Initialize trading account (loads from DB or starts with $1000)
+    print("\nInitializing trading account...")
+    account = TradingAccount(initial_balance=1000.0)
+    print(f"Account state: {account}")
+    print("="*70)
 
     # Set up signal handler
     signal.signal(signal.SIGINT, signal_handler)
@@ -228,7 +289,7 @@ def run_bot():
             print(f"\n{'='*70}")
             print(f"CYCLE #{cycle_count}")
 
-            success = run_analysis_cycle()
+            success = run_analysis_cycle(account)
 
             if success:
                 print(f"\n[OK] Cycle #{cycle_count} complete")
