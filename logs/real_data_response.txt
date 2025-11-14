@@ -1,15 +1,15 @@
 ```json
 {
     "coin": "BTC/USDC:USDC",
-    "signal": "buy_to_enter",
-    "quantity_usd": 2000.0,
-    "leverage": 2.0,
-    "confidence": 0.72,
+    "signal": "hold",
+    "quantity_usd": 0.0,
+    "leverage": 1.0,
+    "confidence": 0.65,
     "exit_plan": {
-        "profit_target": 100500.0,
-        "stop_loss": 97800.0,
-        "invalidation_condition": "RSI-7 breaks below 25 or price closes below 97500 on 3-min chart"
+        "profit_target": null,
+        "stop_loss": null,
+        "invalidation_condition": null
     },
-    "justification": "BTC showing strong oversold conditions with RSI-7 at 30.45 and RSI-14 at 36.12, both indicating potential reversal zone. Price has dropped ~700 points from recent highs to 98783, creating a favorable risk/reward entry. MACD at -197.55 shows strong bearish momentum exhaustion. Price trading below EMA-20 (99383) by ~600 points suggests mean reversion opportunity. 4H context shows price near 50-EMA support at 99470. Volume has dropped to 142.68 vs avg 237.51, suggesting selling pressure may be exhausting. ATR at 295 provides reasonable stop placement. Funding rate neutral at 0.01%, no immediate carry cost pressure. Using conservative 2x leverage with 20% of capital allows room for drawdown while maintaining risk control. Target set at psychological 100k level (+1.7%), stop at -1% below entry to maintain 1.7:1 reward/risk ratio. Position sized to risk ~2% of account on this mean reversion setup."
+    "justification": "HOLDING for clearer setup. Current analysis shows: (1) Price at 98902 is below EMA20 (99306), indicating short-term bearish momentum. (2) MACD at -210.91 is deeply negative and deteriorating (-130 to -210 over last 30min), confirming bearish pressure. (3) RSI(7) at 38.14 is approaching oversold but not extreme - dropped from 60 to 38 rapidly. (4) Price dropped ~850 points (0.85%) in 30 minutes from 99748 to 98902. (5) Volume is extremely low (54 vs avg 240), suggesting this move lacks conviction and could be a fakeout. (6) 4H context shows price near equilibrium (EMA20: 99306 vs EMA50: 99427), not a strong trend. (7) Funding rate at 0.0001 is neutral. RISKS: Entering short here risks catching a falling knife into oversold bounce. Entering long risks continuation of breakdown. With only $10k capital and 0 minutes of trading history, I need HIGH CONFIDENCE setups. Current setup lacks: (1) Volume confirmation, (2) Clear support/resistance levels, (3) RSI divergence or extreme readings, (4) Trend clarity on higher timeframes. WAITING for: RSI to reach <30 for potential long bounce, or price to break and retest a level with volume confirmation. First trade should be high probability, not rushed."
 }
 ```
