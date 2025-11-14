@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alpha Arena Mini - Trading Bot Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>Alpha Arena Mini Dashboard</h1>
+            <div class="header-stats">
+                <div class="stat-card">
+                    <div class="stat-label">Balance</div>
+                    <div class="stat-value" id="balance">$0.00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Total PnL</div>
+                    <div class="stat-value" id="total-pnl">$0.00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Sharpe Ratio</div>
+                    <div class="stat-value" id="sharpe">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Bot Status</div>
+                    <div class="stat-value" id="bot-status">
+                        <span class="status-indicator unknown"></span>
+                        Unknown
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Summary Stats -->
+        <section class="summary">
+            <h2>Summary Statistics</h2>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <span class="stat-label">Total Trades</span>
+                    <span class="stat-value" id="total-trades">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Win Rate</span>
+                    <span class="stat-value" id="win-rate">0%</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Open Positions</span>
+                    <span class="stat-value" id="open-positions">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Realized PnL</span>
+                    <span class="stat-value" id="realized-pnl">$0.00</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Active Positions -->
+        <section class="positions">
+            <h2>Active Positions</h2>
+            <div class="table-container">
+                <table id="positions-table">
+                    <thead>
+                        <tr>
+                            <th>Coin</th>
+                            <th>Side</th>
+                            <th>Entry Price</th>
+                            <th>Quantity (USD)</th>
+                            <th>Leverage</th>
+                            <th>Entry Time</th>
+                        </tr>
+                    </thead>
+                    <tbody id="positions-body">
+                        <tr>
+                            <td colspan="6" class="no-data">No open positions</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Recent Decisions -->
+        <section class="decisions">
+            <h2>Recent Claude Decisions</h2>
+            <div class="table-container">
+                <table id="decisions-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Coin</th>
+                            <th>Signal</th>
+                            <th>Quantity</th>
+                            <th>Leverage</th>
+                            <th>Confidence</th>
+                            <th>Justification</th>
+                        </tr>
+                    </thead>
+                    <tbody id="decisions-body">
+                        <tr>
+                            <td colspan="7" class="no-data">No decisions yet</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Trade History -->
+        <section class="history">
+            <h2>Trade History</h2>
+            <div class="filters">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="open">Open</button>
+                <button class="filter-btn" data-filter="closed">Closed</button>
+            </div>
+            <div class="table-container">
+                <table id="history-table">
+                    <thead>
+                        <tr>
+                            <th>Position ID</th>
+                            <th>Coin</th>
+                            <th>Side</th>
+                            <th>Entry Price</th>
+                            <th>Exit Price</th>
+                            <th>PnL</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-body">
+                        <tr>
+                            <td colspan="7" class="no-data">No trade history</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer>
+            <p>Last updated: <span id="last-update">Never</span></p>
+            <p>Auto-refresh every 30 seconds</p>
+        </footer>
+    </div>
+
+    <script>
+        // API endpoints
+        const API = {
+            account: '/api/account',
+            accountHistory: '/api/account/history',
+            decisions: '/api/decisions',
+            positions: '/api/positions',
+            status: '/api/status',
+            stats: '/api/stats'
+        };
+
+        // Current filter state
+        let currentFilter = 'all';
+
+        // Fetch and update account data
+        async function updateAccount() {
+            try {
+                const response = await fetch(API.account);
+                const data = await response.json();
+
+                document.getElementById('balance').textContent = formatCurrency(data.balance_usd || 0);
+                document.getElementById('total-pnl').textContent = formatCurrency(data.total_pnl || 0);
+                document.getElementById('total-pnl').className = 'stat-value ' + getPnLClass(data.total_pnl || 0);
+                document.getElementById('sharpe').textContent = data.sharpe_ratio ? data.sharpe_ratio.toFixed(2) : '-';
+            } catch (error) {
+                console.error('Error fetching account data:', error);
+            }
+        }
+
+        // Fetch and update summary stats
+        async function updateStats() {
+            try {
+                const response = await fetch(API.stats);
+                const data = await response.json();
+
+                document.getElementById('total-trades').textContent = data.total_trades || 0;
+                document.getElementById('win-rate').textContent = (data.win_rate || 0).toFixed(1) + '%';
+                document.getElementById('open-positions').textContent = data.open_positions || 0;
+                document.getElementById('realized-pnl').textContent = formatCurrency(data.total_realized_pnl || 0);
+                document.getElementById('realized-pnl').className = 'stat-value ' + getPnLClass(data.total_realized_pnl || 0);
+            } catch (error) {
+                console.error('Error fetching stats:', error);
+            }
+        }
+
+        // Fetch and update bot status
+        async function updateStatus() {
+            try {
+                const response = await fetch(API.status);
+                const data = await response.json();
+
+                if (data.current) {
+                    const statusEl = document.getElementById('bot-status');
+                    const indicator = statusEl.querySelector('.status-indicator');
+
+                    statusEl.innerHTML = '';
+                    statusEl.appendChild(indicator);
+
+                    indicator.className = 'status-indicator ' + data.current.status;
+                    statusEl.appendChild(document.createTextNode(' ' + data.current.status));
+                }
+            } catch (error) {
+                console.error('Error fetching status:', error);
+            }
+        }
+
+        // Fetch and update positions
+        async function updatePositions() {
+            try {
+                const response = await fetch(API.positions + '?status=open');
+                const positions = await response.json();
+
+                const tbody = document.getElementById('positions-body');
+                tbody.innerHTML = '';
+
+                if (positions.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="no-data">No open positions</td></tr>';
+                } else {
+                    positions.forEach(pos => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${pos.coin}</td>
+                            <td><span class="badge ${pos.side}">${pos.side.toUpperCase()}</span></td>
+                            <td>$${pos.entry_price.toFixed(2)}</td>
+                            <td>$${pos.quantity_usd.toFixed(2)}</td>
+                            <td>${pos.leverage}x</td>
+                            <td>${formatDateTime(pos.entry_time)}</td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                }
+            } catch (error) {
+                console.error('Error fetching positions:', error);
+            }
+        }
+
+        // Fetch and update decisions
+        async function updateDecisions() {
+            try {
+                const response = await fetch(API.decisions + '?limit=10');
+                const decisions = await response.json();
+
+                const tbody = document.getElementById('decisions-body');
+                tbody.innerHTML = '';
+
+                if (decisions.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="no-data">No decisions yet</td></tr>';
+                } else {
+                    decisions.forEach(dec => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${formatDateTime(dec.timestamp)}</td>
+                            <td>${dec.coin}</td>
+                            <td><span class="badge ${dec.signal}">${dec.signal.toUpperCase()}</span></td>
+                            <td>$${dec.quantity_usd.toFixed(2)}</td>
+                            <td>${dec.leverage}x</td>
+                            <td>${(dec.confidence * 100).toFixed(0)}%</td>
+                            <td class="justification">${dec.justification}</td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                }
+            } catch (error) {
+                console.error('Error fetching decisions:', error);
+            }
+        }
+
+        // Fetch and update trade history
+        async function updateHistory(filter = 'all') {
+            try {
+                const response = await fetch(API.positions + '?status=' + filter + '&limit=50');
+                const positions = await response.json();
+
+                const tbody = document.getElementById('history-body');
+                tbody.innerHTML = '';
+
+                if (positions.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="no-data">No trade history</td></tr>';
+                } else {
+                    positions.forEach(pos => {
+                        const row = document.createElement('tr');
+                        const pnl = pos.realized_pnl || 0;
+                        row.innerHTML = `
+                            <td>${pos.position_id}</td>
+                            <td>${pos.coin}</td>
+                            <td><span class="badge ${pos.side}">${pos.side.toUpperCase()}</span></td>
+                            <td>$${pos.entry_price.toFixed(2)}</td>
+                            <td>${pos.exit_price ? '$' + pos.exit_price.toFixed(2) : '-'}</td>
+                            <td class="${getPnLClass(pnl)}">${pos.exit_price ? formatCurrency(pnl) : '-'}</td>
+                            <td><span class="badge ${pos.status}">${pos.status.toUpperCase()}</span></td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                }
+            } catch (error) {
+                console.error('Error fetching history:', error);
+            }
+        }
+
+        // Update all data
+        async function updateAll() {
+            await Promise.all([
+                updateAccount(),
+                updateStats(),
+                updateStatus(),
+                updatePositions(),
+                updateDecisions(),
+                updateHistory(currentFilter)
+            ]);
+
+            document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+        }
+
+        // Utility functions
+        function formatCurrency(value) {
+            return '$' + value.toFixed(2);
+        }
+
+        function formatDateTime(isoString) {
+            const date = new Date(isoString);
+            return date.toLocaleString();
+        }
+
+        function getPnLClass(value) {
+            if (value > 0) return 'positive';
+            if (value < 0) return 'negative';
+            return 'neutral';
+        }
+
+        // Filter buttons
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentFilter = btn.dataset.filter;
+                updateHistory(currentFilter);
+            });
+        });
+
+        // Initial load
+        updateAll();
+
+        // Auto-refresh every 30 seconds
+        setInterval(updateAll, 30000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+```json
+{
+    "coin": "BTC/USDC:USDC",
+    "signal": "buy_to_enter",
+    "quantity_usd": 2000.0,
+    "leverage": 2.0,
+    "confidence": 0.72,
+    "exit_plan": {
+        "profit_target": 100500.0,
+        "stop_loss": 97800.0,
+        "invalidation_condition": "RSI-7 breaks below 25 or price closes below 97500 on 3-min chart"
+    },
+    "justification": "BTC showing strong oversold conditions with RSI-7 at 30.45 and RSI-14 at 36.12, both indicating potential reversal zone. Price has dropped ~700 points from recent highs to 98783, creating a favorable risk/reward entry. MACD at -197.55 shows strong bearish momentum exhaustion. Price trading below EMA-20 (99383) by ~600 points suggests mean reversion opportunity. 4H context shows price near 50-EMA support at 99470. Volume has dropped to 142.68 vs avg 237.51, suggesting selling pressure may be exhausting. ATR at 295 provides reasonable stop placement. Funding rate neutral at 0.01%, no immediate carry cost pressure. Using conservative 2x leverage with 20% of capital allows room for drawdown while maintaining risk control. Target set at psychological 100k level (+1.7%), stop at -1% below entry to maintain 1.7:1 reward/risk ratio. Position sized to risk ~2% of account on this mean reversion setup."
+}
+```

@@ -18,6 +18,7 @@ from data.indicators import TechnicalIndicators
 from llm.client import ClaudeClient
 from llm.prompts import get_system_prompt, build_user_prompt
 from llm.parser import parse_llm_response
+from trading.logger import TradingLogger
 
 print("=" * 70)
 print("TESTING WITH REAL HYPERLIQUID MARKET DATA")
@@ -104,6 +105,21 @@ if not decision:
     print("  [FAIL] Could not parse Claude's response")
     print(f"  Raw response: {response[:500]}...")
     sys.exit(1)
+
+# Log decision and account state to database
+print("  [OK] Logging decision to database...")
+logger = TradingLogger()
+logger.log_decision_from_trade_decision(decision, raw_response=response)
+logger.log_account_state(
+    balance=account_state['available_cash'],
+    equity=account_state['total_value'],
+    unrealized_pnl=0.0,
+    realized_pnl=0.0,
+    sharpe_ratio=account_state.get('sharpe_ratio', 0.0),
+    num_positions=len(account_state['positions'])
+)
+logger.log_bot_status('running', 'Test run with real market data')
+print("  [OK] Data logged to database")
 
 # Display decision
 print("=" * 70)

@@ -1,0 +1,26 @@
+// prices-fetch-script.js
+
+// Replace with your Alchemy API key:
+const apiKey = "7NBTdVMFlqXaf5D-r-0kb73aehWeZ1Aj";
+
+// Define the symbols you want to fetch prices for.
+const symbols = ["ETH", "BTC", "USDT"];
+
+async function getTokenPricesBySymbol() {
+  try {
+    const symbolsParam = symbols.join(',');
+    const response = await fetch(`https://api.g.alchemy.com/prices/v1/tokens/by-symbol?symbols=${symbolsParam}`, {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`
+      }
+    });
+
+    const data = await response.json();
+    console.log("Token Prices By Symbol:");
+    console.log(JSON.stringify(data, null, 2));
+  } catch (error) {
+    console.error("Error:", error);
+  }
+}
+
+getTokenPricesBySymbol();
