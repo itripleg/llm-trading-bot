@@ -12,9 +12,31 @@
         <header>
             <div class="header-top">
                 <h1>Alpha Arena Mini</h1>
-                <div class="bot-status-compact">
-                    <span class="status-indicator unknown" id="status-dot"></span>
-                    <span id="status-text">Analyzing</span>
+                <div class="header-controls">
+                    <div class="bot-status-compact">
+                        <span class="status-indicator unknown" id="status-dot"></span>
+                        <span id="status-text">Stopped</span>
+                    </div>
+                    <div class="bot-controls">
+                        <button class="bot-control-btn start-btn" id="start-btn">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M5 3.5v9L12 8z"/>
+                            </svg>
+                            Start
+                        </button>
+                        <button class="bot-control-btn pause-btn" id="pause-btn" style="display: none;">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M5 3h2v10H5V3zm4 0h2v10H9V3z"/>
+                            </svg>
+                            Pause
+                        </button>
+                        <button class="bot-control-btn stop-btn" id="stop-btn" style="display: none;">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <rect x="4" y="4" width="8" height="8"/>
+                            </svg>
+                            Stop
+                        </button>
+                    </div>
                 </div>
             </div>
             <div class="header-stats-compact">
@@ -93,7 +115,12 @@
             decisions: '/api/decisions',
             positions: '/api/positions',
             status: '/api/status',
-            stats: '/api/stats'
+            stats: '/api/stats',
+            botStatus: '/api/bot/status',
+            botStart: '/api/bot/start',
+            botPause: '/api/bot/pause',
+            botResume: '/api/bot/resume',
+            botStop: '/api/bot/stop'
         };
 
         let currentFilter = 'all';
@@ -366,18 +393,108 @@
         // Update bot status
         async function updateStatus() {
             try {
-                const response = await fetch(API.status);
+                const response = await fetch(API.botStatus);
                 const data = await response.json();
 
-                if (data.current) {
-                    const dot = document.getElementById('status-dot');
-                    const text = document.getElementById('status-text');
+                const dot = document.getElementById('status-dot');
+                const text = document.getElementById('status-text');
+                const startBtn = document.getElementById('start-btn');
+                const pauseBtn = document.getElementById('pause-btn');
+                const stopBtn = document.getElementById('stop-btn');
 
-                    dot.className = 'status-indicator ' + data.current.status;
-                    text.textContent = data.current.status.charAt(0).toUpperCase() + data.current.status.slice(1);
+                // Update status indicator
+                const state = data.state || 'stopped';
+                dot.className = 'status-indicator ' + state;
+                text.textContent = state.charAt(0).toUpperCase() + state.slice(1);
+
+                // Update button visibility based on state
+                if (state === 'running') {
+                    startBtn.style.display = 'none';
+                    pauseBtn.style.display = 'flex';
+                    stopBtn.style.display = 'flex';
+                } else if (state === 'paused') {
+                    startBtn.style.display = 'flex';
+                    startBtn.textContent = 'Resume';
+                    pauseBtn.style.display = 'none';
+                    stopBtn.style.display = 'flex';
+                } else {
+                    startBtn.style.display = 'flex';
+                    startBtn.innerHTML = `
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M5 3.5v9L12 8z"/>
+                        </svg>
+                        Start
+                    `;
+                    pauseBtn.style.display = 'none';
+                    stopBtn.style.display = 'none';
                 }
             } catch (error) {
                 console.error('Error fetching status:', error);
+            }
+        }
+
+        // Bot control functions
+        async function startBot() {
+            try {
+                const response = await fetch(API.botStart, { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    console.log('Bot started');
+                    updateStatus();
+                } else {
+                    alert('Failed to start bot: ' + data.message);
+                }
+            } catch (error) {
+                alert('Error starting bot: ' + error.message);
+            }
+        }
+
+        async function pauseBot() {
+            try {
+                const response = await fetch(API.botPause, { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    console.log('Bot paused');
+                    updateStatus();
+                } else {
+                    alert('Failed to pause bot: ' + data.message);
+                }
+            } catch (error) {
+                alert('Error pausing bot: ' + error.message);
+            }
+        }
+
+        async function resumeBot() {
+            try {
+                const response = await fetch(API.botResume, { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    console.log('Bot resumed');
+                    updateStatus();
+                } else {
+                    alert('Failed to resume bot: ' + data.message);
+                }
+            } catch (error) {
+                alert('Error resuming bot: ' + error.message);
+            }
+        }
+
+        async function stopBot() {
+            try {
+                const response = await fetch(API.botStop, { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    console.log('Bot stopped');
+                    updateStatus();
+                } else {
+                    alert('Failed to stop bot: ' + data.message);
+                }
+            } catch (error) {
+                alert('Error stopping bot: ' + error.message);
             }
         }
 
@@ -536,6 +653,24 @@
             if (currentDecisionIndex < allDecisions.length - 1) {
                 showDecisionAtIndex(currentDecisionIndex + 1);
             }
+        });
+
+        // Bot control buttons
+        document.getElementById('start-btn').addEventListener('click', () => {
+            const btnText = document.getElementById('start-btn').textContent.trim();
+            if (btnText === 'Resume') {
+                resumeBot();
+            } else {
+                startBot();
+            }
+        });
+
+        document.getElementById('pause-btn').addEventListener('click', () => {
+            pauseBot();
+        });
+
+        document.getElementById('stop-btn').addEventListener('click', () => {
+            stopBot();
         });
 
         // Initial load

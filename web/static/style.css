@@ -44,6 +44,12 @@ header h1 {
     font-weight: 600;
 }
 
+.header-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
 .bot-status-compact {
     display: flex;
     align-items: center;
@@ -52,6 +58,52 @@ header h1 {
     padding: 8px 16px;
     border-radius: 20px;
     font-size: 0.9rem;
+}
+
+.bot-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.bot-control-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.85rem;
+    transition: all 0.3s ease;
+}
+
+.bot-control-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.bot-control-btn.start-btn:hover {
+    background: #28a745;
+    border-color: #28a745;
+}
+
+.bot-control-btn.pause-btn:hover {
+    background: #ffc107;
+    border-color: #ffc107;
+    color: #333;
+}
+
+.bot-control-btn.stop-btn:hover {
+    background: #dc3545;
+    border-color: #dc3545;
+}
+
+.bot-control-btn svg {
+    width: 16px;
+    height: 16px;
 }
 
 .header-stats-compact {

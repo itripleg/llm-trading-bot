@@ -12,6 +12,8 @@ from flask import Flask, render_template, jsonify, request
 from flask_cors import CORS
 from pathlib import Path
 import sys
+import subprocess
+import psutil
 
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -191,6 +193,175 @@ def api_stats():
         'current_equity': account['equity_usd'] if account else 0,
         'sharpe_ratio': account['sharpe_ratio'] if account else None
     })
+
+
+# ============================================================================
+# BOT CONTROL
+# ============================================================================
+
+# Control file path
+BOT_CONTROL_FILE = Path(__file__).parent.parent / "data" / "bot_control.txt"
+
+
+def read_bot_state():
+    """Read the current bot state from control file."""
+    if not BOT_CONTROL_FILE.exists():
+        return "stopped"
+    try:
+        return BOT_CONTROL_FILE.read_text().strip()
+    except:
+        return "stopped"
+
+
+def write_bot_state(state):
+    """Write bot state to control file."""
+    BOT_CONTROL_FILE.parent.mkdir(parents=True, exist_ok=True)
+    BOT_CONTROL_FILE.write_text(state)
+
+
+def is_bot_process_running():
+    """Check if the bot process is actually running."""
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+        try:
+            cmdline = proc.info.get('cmdline')
+            if cmdline and 'run_analysis_bot.py' in ' '.join(cmdline):
+                return True
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    return False
+
+
+@app.route('/api/bot/status')
+def api_bot_status():
+    """
+    Get current bot status.
+
+    Returns:
+        JSON with bot state and process status
+    """
+    state = read_bot_state()
+    is_running = is_bot_process_running()
+
+    return jsonify({
+        'state': state,
+        'is_process_running': is_running,
+        'control_file': str(BOT_CONTROL_FILE)
+    })
+
+
+@app.route('/api/bot/start', methods=['POST'])
+def api_bot_start():
+    """
+    Start the analysis bot.
+
+    Returns:
+        JSON with success status
+    """
+    try:
+        # Check if already running
+        if is_bot_process_running():
+            return jsonify({
+                'success': False,
+                'message': 'Bot is already running'
+            }), 400
+
+        # Start the bot process
+        python_exe = sys.executable
+        bot_script = Path(__file__).parent.parent / "run_analysis_bot.py"
+
+        # Start in background
+        subprocess.Popen(
+            [python_exe, str(bot_script), "start"],
+            creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform == 'win32' else 0
+        )
+
+        write_bot_state('running')
+
+        return jsonify({
+            'success': True,
+            'message': 'Bot started successfully'
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Failed to start bot: {str(e)}'
+        }), 500
+
+
+@app.route('/api/bot/pause', methods=['POST'])
+def api_bot_pause():
+    """
+    Pause the analysis bot.
+
+    Returns:
+        JSON with success status
+    """
+    try:
+        write_bot_state('paused')
+
+        return jsonify({
+            'success': True,
+            'message': 'Bot paused'
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Failed to pause bot: {str(e)}'
+        }), 500
+
+
+@app.route('/api/bot/resume', methods=['POST'])
+def api_bot_resume():
+    """
+    Resume the paused bot.
+
+    Returns:
+        JSON with success status
+    """
+    try:
+        if not is_bot_process_running():
+            return jsonify({
+                'success': False,
+                'message': 'Bot process is not running. Use start instead.'
+            }), 400
+
+        write_bot_state('running')
+
+        return jsonify({
+            'success': True,
+            'message': 'Bot resumed'
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Failed to resume bot: {str(e)}'
+        }), 500
+
+
+@app.route('/api/bot/stop', methods=['POST'])
+def api_bot_stop():
+    """
+    Stop the analysis bot.
+
+    Returns:
+        JSON with success status
+    """
+    try:
+        write_bot_state('stopped')
+
+        return jsonify({
+            'success': True,
+            'message': 'Bot stopped'
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Failed to stop bot: {str(e)}'
+        }), 500
 
 
 # ============================================================================
