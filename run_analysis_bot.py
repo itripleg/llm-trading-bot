@@ -14,7 +14,7 @@ import sys
 import time
 import signal
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -51,7 +51,7 @@ def write_control_state(state):
 
 def signal_handler(sig, frame):
     """Handle Ctrl+C gracefully."""
-    print("\n\n[!] Stopping bot...")
+    print("\n\n[!] Stopping bot...", flush=True)
     write_control_state("stopped")
     sys.exit(0)
 
@@ -72,9 +72,9 @@ def run_analysis_cycle(account: TradingAccount):
         bool: True if successful, False if error
     """
     try:
-        print("\n" + "="*70)
-        print(f"ANALYSIS CYCLE - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print("="*70)
+        print("\n" + "="*70, flush=True)
+        print(f"ANALYSIS CYCLE - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
+        print("="*70, flush=True)
 
         # Initialize
         fetcher = MarketDataFetcher()
@@ -83,32 +83,32 @@ def run_analysis_cycle(account: TradingAccount):
 
         # Get assets from settings
         assets = [a.strip() for a in settings.trading_assets.split(',')]
-        print(f"\n[1/4] Analyzing assets: {', '.join(assets)}")
+        print(f"\n[1/4] Analyzing assets: {', '.join(assets)}", flush=True)
 
         # For now, just analyze the first asset (BTC)
         # TODO: Analyze all assets in future
         coin = assets[0]
-        print(f"  Focusing on: {coin}")
+        print(f"  Focusing on: {coin}", flush=True)
 
         # Fetch market data
-        print(f"\n[2/4] Fetching market data for {coin}...")
+        print(f"\n[2/4] Fetching market data for {coin}...", flush=True)
         ohlcv = fetcher.fetch_ohlcv(coin, timeframe='3m', limit=100)
 
         if ohlcv.empty:
-            print(f"  [FAIL] Could not fetch data for {coin}")
+            print(f"  [FAIL] Could not fetch data for {coin}", flush=True)
             return False
 
         current_price = ohlcv['close'].iloc[-1]
-        print(f"  [OK] Current price: ${current_price:,.2f}")
+        print(f"  [OK] Current price: ${current_price:,.2f}", flush=True)
 
         # Calculate indicators
-        print(f"\n[3/4] Calculating indicators...")
+        print(f"\n[3/4] Calculating indicators...", flush=True)
         data_with_indicators = TechnicalIndicators.calculate_all(ohlcv)
 
         latest = data_with_indicators.iloc[-1]
-        print(f"  RSI-14: {latest.get('rsi_14', 0):.2f}")
-        print(f"  MACD: {latest.get('macd', 0):.2f}")
-        print(f"  EMA-20: ${latest.get('ema_20', 0):,.2f}")
+        print(f"  RSI-14: {latest.get('rsi_14', 0):.2f}", flush=True)
+        print(f"  MACD: {latest.get('macd', 0):.2f}", flush=True)
+        print(f"  EMA-20: ${latest.get('ema_20', 0):,.2f}", flush=True)
 
         # Get current account state
         current_prices = {coin: current_price}
@@ -116,7 +116,7 @@ def run_analysis_cycle(account: TradingAccount):
 
         print(f"\n[ACCOUNT] Balance: ${account_summary['balance']:.2f}, " +
               f"Equity: ${account_summary['equity']:.2f}, " +
-              f"Positions: {account_summary['num_positions']}")
+              f"Positions: {account_summary['num_positions']}", flush=True)
 
         # Build prompt with real account state
         market_data = {
@@ -141,27 +141,27 @@ def run_analysis_cycle(account: TradingAccount):
         user_prompt = build_user_prompt(market_data, account_state, 0)
 
         # Get Claude's decision
-        print(f"\n[4/4] Getting Claude's analysis...")
-        print(f"  (This may take 10-30 seconds...)")
+        print(f"\n[4/4] Getting Claude's analysis...", flush=True)
+        print(f"  (This may take 10-30 seconds...)", flush=True)
 
         response = client.get_trading_decision(system_prompt, user_prompt)
 
         if not response:
-            print("  [FAIL] No response from Claude")
+            print("  [FAIL] No response from Claude", flush=True)
             return False
 
         # Parse decision
         decision = parse_llm_response(response)
 
         if not decision:
-            print("  [FAIL] Could not parse response")
+            print("  [FAIL] Could not parse response", flush=True)
             return False
 
         # Log decision to database
         logger.log_decision_from_trade_decision(decision, raw_response=response)
 
         # Execute decision (paper trading)
-        print(f"\n[EXECUTION] Executing decision: {decision.signal.value.upper()}")
+        print(f"\n[EXECUTION] Executing decision: {decision.signal.value.upper()}", flush=True)
 
         if decision.signal.value == 'buy_to_enter':
             # Open long position
@@ -174,9 +174,9 @@ def run_analysis_cycle(account: TradingAccount):
                     leverage=decision.leverage
                 )
             else:
-                print(f"  [REJECTED] Insufficient balance")
-                print(f"    Required: ${decision.quantity_usd:.2f}")
-                print(f"    Available: ${account.balance:.2f}")
+                print(f"  [REJECTED] Insufficient balance", flush=True)
+                print(f"    Required: ${decision.quantity_usd:.2f}", flush=True)
+                print(f"    Available: ${account.balance:.2f}", flush=True)
 
         elif decision.signal.value == 'sell_to_enter':
             # Open short position
@@ -189,52 +189,53 @@ def run_analysis_cycle(account: TradingAccount):
                     leverage=decision.leverage
                 )
             else:
-                print(f"  [REJECTED] Insufficient balance")
-                print(f"    Required: ${decision.quantity_usd:.2f}")
-                print(f"    Available: ${account.balance:.2f}")
+                print(f"  [REJECTED] Insufficient balance", flush=True)
+                print(f"    Required: ${decision.quantity_usd:.2f}", flush=True)
+                print(f"    Available: ${account.balance:.2f}", flush=True)
 
         elif decision.signal.value == 'close':
             # Close existing position
             if coin in account.positions:
                 account.close_position(coin, exit_price=current_price)
             else:
-                print(f"  [INFO] No position to close for {coin}")
+                print(f"  [INFO] No position to close for {coin}", flush=True)
 
         elif decision.signal.value == 'hold':
             # Just hold, update unrealized PnL
-            print(f"  [HOLD] No action taken")
+            print(f"  [HOLD] No action taken", flush=True)
             if coin in account.positions:
                 unrealized_pnl = account.positions[coin].calculate_pnl(current_price)
-                print(f"    Current position unrealized PnL: ${unrealized_pnl:+.2f}")
+                print(f"    Current position unrealized PnL: ${unrealized_pnl:+.2f}", flush=True)
 
         # Save updated account state
         account.save_state(current_prices)
         logger.log_bot_status('running', f'Executed {decision.signal.value} for {coin}')
 
         # Display decision
-        print("\n" + "-"*70)
-        print("CLAUDE'S DECISION:")
-        print("-"*70)
-        print(f"Signal: {decision.signal.value.upper()}")
-        print(f"Confidence: {decision.confidence:.0%}")
-        print(f"Quantity: ${decision.quantity_usd:.2f}")
-        print(f"Leverage: {decision.leverage}x")
+        print("\n" + "-"*70, flush=True)
+        print("CLAUDE'S DECISION:", flush=True)
+        print("-"*70, flush=True)
+        print(f"Signal: {decision.signal.value.upper()}", flush=True)
+        print(f"Confidence: {decision.confidence:.0%}", flush=True)
+        print(f"Quantity: ${decision.quantity_usd:.2f}", flush=True)
+        print(f"Leverage: {decision.leverage}x", flush=True)
 
         if decision.exit_plan.profit_target:
-            print(f"Target: ${decision.exit_plan.profit_target:,.2f}")
+            print(f"Target: ${decision.exit_plan.profit_target:,.2f}", flush=True)
         if decision.exit_plan.stop_loss:
-            print(f"Stop: ${decision.exit_plan.stop_loss:,.2f}")
+            print(f"Stop: ${decision.exit_plan.stop_loss:,.2f}", flush=True)
 
-        print(f"\nJustification: {decision.justification[:150]}...")
-        print("-"*70)
-        print("[OK] Decision logged to database")
+        print(f"\nJustification: {decision.justification[:150]}...", flush=True)
+        print("-"*70, flush=True)
+        print("[OK] Decision logged to database", flush=True)
 
         return True
 
     except Exception as e:
-        print(f"\n[ERROR] Analysis cycle failed: {e}")
+        print(f"\n[ERROR] Analysis cycle failed: {e}", flush=True)
         import traceback
         traceback.print_exc()
+        sys.stdout.flush()
         return False
 
 
@@ -242,22 +243,22 @@ def run_bot():
     """Main bot loop - runs continuously until stopped."""
     global RUNNING
 
-    print("="*70)
-    print("ALPHA ARENA MINI - PAPER TRADING BOT")
-    print("="*70)
-    print("\nThis bot trades with simulated money (paper trading).")
-    print("Claude makes decisions, bot executes them with fake balance.")
-    print("\nControls:")
-    print("  - Dashboard: http://localhost:5000")
-    print("  - Ctrl+C: Stop the bot")
-    print("  - Control file:", CONTROL_FILE)
-    print("\n" + "="*70)
+    print("="*70, flush=True)
+    print("ALPHA ARENA MINI - PAPER TRADING BOT", flush=True)
+    print("="*70, flush=True)
+    print("\nThis bot trades with simulated money (paper trading).", flush=True)
+    print("Claude makes decisions, bot executes them with fake balance.", flush=True)
+    print("\nControls:", flush=True)
+    print("  - Dashboard: http://localhost:5000", flush=True)
+    print("  - Ctrl+C: Stop the bot", flush=True)
+    print("  - Control file:", CONTROL_FILE, flush=True)
+    print("\n" + "="*70, flush=True)
 
     # Initialize trading account (loads from DB or starts with $1000)
-    print("\nInitializing trading account...")
+    print("\nInitializing trading account...", flush=True)
     account = TradingAccount(initial_balance=1000.0)
-    print(f"Account state: {account}")
-    print("="*70)
+    print(f"Account state: {account}", flush=True)
+    print("="*70, flush=True)
 
     # Set up signal handler
     signal.signal(signal.SIGINT, signal_handler)
@@ -274,56 +275,64 @@ def run_bot():
             state = read_control_state()
 
             if state != "running":
-                print(f"\n[!] Bot paused. Waiting for resume signal...")
+                print(f"\n[!] Bot paused. Waiting for resume signal...", flush=True)
                 write_control_state("paused")
 
                 # Wait until resumed
                 while read_control_state() == "paused":
                     time.sleep(5)
 
-                print("[!] Bot resumed!")
+                print("[!] Bot resumed!", flush=True)
                 continue
 
             # Run analysis cycle
             cycle_count += 1
-            print(f"\n{'='*70}")
-            print(f"CYCLE #{cycle_count}")
+            print(f"\n{'='*70}", flush=True)
+            print(f"CYCLE #{cycle_count}", flush=True)
 
             success = run_analysis_cycle(account)
 
             if success:
-                print(f"\n[OK] Cycle #{cycle_count} complete")
+                print(f"\n[OK] Cycle #{cycle_count} complete", flush=True)
             else:
-                print(f"\n[FAIL] Cycle #{cycle_count} had errors")
+                print(f"\n[FAIL] Cycle #{cycle_count} had errors", flush=True)
 
             # Wait 2-3 minutes before next cycle
             wait_time = 150  # 2.5 minutes
-            print(f"\n[*] Waiting {wait_time} seconds until next cycle...")
-            print(f"    Next cycle at: {datetime.now().replace(second=0, microsecond=0)}")
-            print(f"    Press Ctrl+C to stop")
+            next_cycle_time = datetime.now() + timedelta(seconds=wait_time)
+            print(f"\n[*] Waiting {wait_time} seconds until next cycle...", flush=True)
+            print(f"    Next cycle at: {next_cycle_time.strftime('%H:%M:%S')}", flush=True)
+            print(f"    Press Ctrl+C to stop", flush=True)
 
             # Sleep in small chunks so we can respond to stop quickly
-            for _ in range(wait_time):
+            # Show countdown every 30 seconds
+            for i in range(wait_time):
                 if read_control_state() != "running":
                     break
+
+                # Show progress every 30 seconds
+                if i > 0 and i % 30 == 0:
+                    remaining = wait_time - i
+                    print(f"    [{remaining}s remaining...]", flush=True)
+
                 time.sleep(1)
 
     except KeyboardInterrupt:
-        print("\n\n[!] Bot stopped by user")
+        print("\n\n[!] Bot stopped by user", flush=True)
     finally:
         write_control_state("stopped")
-        print("\n[*] Bot stopped")
+        print("\n[*] Bot stopped", flush=True)
 
 
 def get_status():
     """Get current bot status."""
     state = read_control_state()
 
-    print(f"Bot status: {state.upper()}")
-    print(f"Control file: {CONTROL_FILE}")
+    print(f"Bot status: {state.upper()}", flush=True)
+    print(f"Control file: {CONTROL_FILE}", flush=True)
 
     if CONTROL_FILE.exists():
-        print(f"Last modified: {datetime.fromtimestamp(CONTROL_FILE.stat().st_mtime)}")
+        print(f"Last modified: {datetime.fromtimestamp(CONTROL_FILE.stat().st_mtime)}", flush=True)
 
     return state
 
@@ -335,32 +344,32 @@ def main():
 
         if command == "start":
             if read_control_state() == "running":
-                print("Bot is already running!")
+                print("Bot is already running!", flush=True)
                 sys.exit(1)
 
-            print("Starting bot...")
+            print("Starting bot...", flush=True)
             run_bot()
 
         elif command == "stop":
-            print("Stopping bot...")
+            print("Stopping bot...", flush=True)
             write_control_state("stopped")
-            print("Bot stopped")
+            print("Bot stopped", flush=True)
 
         elif command == "pause":
-            print("Pausing bot...")
+            print("Pausing bot...", flush=True)
             write_control_state("paused")
-            print("Bot paused")
+            print("Bot paused", flush=True)
 
         elif command == "resume":
-            print("Resuming bot...")
+            print("Resuming bot...", flush=True)
             write_control_state("running")
-            print("Bot resumed")
+            print("Bot resumed", flush=True)
 
         elif command == "status":
             get_status()
 
         else:
-            print("Usage: python run_analysis_bot.py [start|stop|pause|resume|status]")
+            print("Usage: python run_analysis_bot.py [start|stop|pause|resume|status]", flush=True)
             sys.exit(1)
     else:
         # No arguments - just start the bot
