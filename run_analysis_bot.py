@@ -106,9 +106,32 @@ def run_analysis_cycle(account: TradingAccount):
         data_with_indicators = TechnicalIndicators.calculate_all(ohlcv)
 
         latest = data_with_indicators.iloc[-1]
-        print(f"  RSI-14: {latest.get('rsi_14', 0):.2f}", flush=True)
-        print(f"  MACD: {latest.get('macd', 0):.2f}", flush=True)
-        print(f"  EMA-20: ${latest.get('ema_20', 0):,.2f}", flush=True)
+
+        # Display market data summary
+        print(f"\n" + "="*70, flush=True)
+        print(f"MARKET DATA SUMMARY - {coin}", flush=True)
+        print("="*70, flush=True)
+        print(f"Current Price:    ${current_price:,.2f}", flush=True)
+        print(f"", flush=True)
+        print(f"Technical Indicators (3-minute timeframe):", flush=True)
+        print(f"  EMA-20:         ${latest.get('ema_20', 0):,.2f}", flush=True)
+        print(f"  EMA-50:         ${latest.get('ema_50', 0):,.2f}", flush=True)
+        print(f"  RSI-7:          {latest.get('rsi_7', 0):.2f}", flush=True)
+        print(f"  RSI-14:         {latest.get('rsi_14', 0):.2f}", flush=True)
+        print(f"  MACD:           {latest.get('macd', 0):.2f}", flush=True)
+        print(f"  MACD Signal:    {latest.get('macd_signal', 0):.2f}", flush=True)
+        print(f"  MACD Histogram: {latest.get('macd_hist', 0):.2f}", flush=True)
+
+        # Show price trend
+        if len(data_with_indicators) >= 2:
+            prev_price = data_with_indicators['close'].iloc[-2]
+            price_change = current_price - prev_price
+            price_change_pct = (price_change / prev_price) * 100
+            trend_symbol = "UP" if price_change > 0 else "DOWN" if price_change < 0 else "FLAT"
+            print(f"", flush=True)
+            print(f"Recent Movement:  {trend_symbol} ${price_change:+.2f} ({price_change_pct:+.2f}%)", flush=True)
+
+        print("="*70, flush=True)
 
         # Get current account state
         current_prices = {coin: current_price}
