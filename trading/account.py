@@ -16,7 +16,8 @@ from web.database import (
     get_latest_account_state,
     save_position_entry,
     close_position as db_close_position,
-    get_open_positions
+    get_open_positions,
+    get_closed_positions
 )
 
 
