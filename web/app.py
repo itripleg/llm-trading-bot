@@ -14,6 +14,7 @@ from pathlib import Path
 import sys
 import subprocess
 import psutil
+import os
 
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -269,9 +270,14 @@ def api_bot_start():
         python_exe = sys.executable
         bot_script = Path(__file__).parent.parent / "run_analysis_bot.py"
 
+        # Set environment variables to ensure unbuffered output
+        env = os.environ.copy()
+        env['PYTHONUNBUFFERED'] = '1'
+
         # Start in background
         subprocess.Popen(
             [python_exe, str(bot_script), "start"],
+            env=env,
             creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform == 'win32' else 0
         )
 

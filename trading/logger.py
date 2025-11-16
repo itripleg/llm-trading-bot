@@ -201,13 +201,21 @@ class TradingLogger:
         """
         db_log_bot_status(status=status, message=message, error=error)
 
-    def log_decision_from_trade_decision(self, trade_decision, raw_response: Optional[str] = None) -> int:
+    def log_decision_from_trade_decision(
+        self,
+        trade_decision,
+        raw_response: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        user_prompt: Optional[str] = None
+    ) -> int:
         """
         Convenience method to log a TradeDecision Pydantic model directly.
 
         Args:
             trade_decision: TradeDecision model instance from llm/parser.py
             raw_response: Optional raw JSON string from Claude
+            system_prompt: Optional system prompt sent to Claude
+            user_prompt: Optional user prompt sent to Claude
 
         Returns:
             Database ID of the saved decision
@@ -215,7 +223,9 @@ class TradingLogger:
         Example:
             from llm.parser import TradeDecision
             decision = TradeDecision(**response_dict)
-            decision_id = logger.log_decision_from_trade_decision(decision, raw_json)
+            decision_id = logger.log_decision_from_trade_decision(
+                decision, raw_json, system_prompt, user_prompt
+            )
         """
         decision_dict = {
             'coin': trade_decision.coin,
@@ -231,7 +241,7 @@ class TradingLogger:
             'justification': trade_decision.justification
         }
 
-        return save_decision(decision_dict, raw_response)
+        return save_decision(decision_dict, raw_response, system_prompt, user_prompt)
 
 
 # Singleton instance for convenience

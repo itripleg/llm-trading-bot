@@ -45,8 +45,12 @@
                     <span class="value" id="balance">$0.00</span>
                 </div>
                 <div class="stat-compact">
-                    <span class="label">Total PnL</span>
-                    <span class="value" id="total-pnl">$0.00</span>
+                    <span class="label">Realized PnL</span>
+                    <span class="value" id="realized-pnl">$0.00</span>
+                </div>
+                <div class="stat-compact">
+                    <span class="label">Unrealized PnL</span>
+                    <span class="value" id="unrealized-pnl">$0.00</span>
                 </div>
                 <div class="stat-compact">
                     <span class="label">Decisions</span>
@@ -81,6 +85,34 @@
             </div>
             <div id="latest-decision-card">
                 <div class="no-data-card">No decisions yet. Run test_real_data.py to analyze market conditions.</div>
+            </div>
+        </section>
+
+        <!-- Bot Activity Console -->
+        <section class="bot-activity">
+            <div class="section-header">
+                <h2>Bot Activity</h2>
+                <span class="activity-subtitle">Real-time bot status and logs</span>
+            </div>
+
+            <!-- System Prompt (static, shown once) -->
+            <div class="system-prompt-section" id="system-prompt-section" style="margin-bottom: 20px;">
+                <button class="raw-data-btn" onclick="toggleSystemPrompt()" style="max-width: 300px;">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M3 2.5a2.5 2.5 0 0 1 5 0 2.5 2.5 0 0 1 5 0v.006c0 .07 0 .27-.038.494H15a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1v7.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 14.5V7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h2.038A2.968 2.968 0 0 1 3 2.506V2.5zm1.068.5H7v-.5a1.5 1.5 0 1 0-3 0c0 .085.002.274.045.43a.522.522 0 0 0 .023.07zM9 3h2.932a.56.56 0 0 0 .023-.07c.043-.156.045-.345.045-.43a1.5 1.5 0 0 0-3 0V3zM1 4v2h6V4H1zm8 0v2h6V4H9zm5 3H9v8h4.5a.5.5 0 0 0 .5-.5V7zm-7 8V7H2v7.5a.5.5 0 0 0 .5.5H7z"/>
+                    </svg>
+                    View System Prompt (Trading Instructions)
+                </button>
+                <div class="raw-data-content" id="system-prompt-content" style="display: none;">
+                    <h4 style="margin-top: 0; color: #333;">System Prompt (same for all decisions):</h4>
+                    <pre><code id="system-prompt-text">Loading...</code></pre>
+                </div>
+            </div>
+
+            <!-- Activity Log -->
+            <h3 style="font-size: 1rem; margin-bottom: 12px; color: #495057;">Activity Log</h3>
+            <div class="activity-console" id="activity-console">
+                <div class="console-message">Waiting for bot activity...</div>
             </div>
         </section>
 
@@ -145,7 +177,9 @@
 
         // Format relative time
         function formatRelativeTime(isoString) {
-            const date = new Date(isoString);
+            // Ensure UTC parsing by adding 'Z' if not present
+            const utcString = isoString.endsWith('Z') ? isoString : isoString + 'Z';
+            const date = new Date(utcString);
             const now = new Date();
             const diffMs = now - date;
             const diffMins = Math.floor(diffMs / 60000);
@@ -235,6 +269,38 @@
                         </div>
             `;
 
+            // Show entry price for buy/sell/hold decisions
+            if ((decision.signal === 'buy_to_enter' || decision.signal === 'sell_to_enter' || decision.signal === 'hold') && decision.entry_price) {
+                html += `
+                        <div class="metric">
+                            <span class="metric-label">Entry</span>
+                            <span class="metric-value">$${decision.entry_price.toFixed(0)}</span>
+                        </div>
+                `;
+            }
+
+            // Show exit price and PnL for close decisions
+            if (decision.signal === 'close' && decision.exit_price) {
+                html += `
+                        <div class="metric">
+                            <span class="metric-label">Exit</span>
+                            <span class="metric-value">$${decision.exit_price.toFixed(0)}</span>
+                        </div>
+                `;
+                if (decision.realized_pnl !== null && decision.realized_pnl !== undefined) {
+                    const pnlClass = decision.realized_pnl > 0 ? 'positive' : decision.realized_pnl < 0 ? 'negative' : '';
+                    html += `
+                        <div class="metric">
+                            <span class="metric-label">PnL</span>
+                            <span class="metric-value ${pnlClass}">$${decision.realized_pnl.toFixed(2)}</span>
+                        </div>
+                    `;
+                }
+            }
+
+            // Continue with original metrics
+            html += ``;
+
             if (decision.profit_target) {
                 html += `
                         <div class="metric">
@@ -263,7 +329,9 @@
                         <ul class="analysis-points">
                 `;
                 sections.analysis.forEach(point => {
-                    html += `<li>${point}</li>`;
+                    // Remove existing (N) prefix if present since <li> will auto-number
+                    const cleanPoint = point.replace(/^\(\d+\)\s*/, '');
+                    html += `<li>${cleanPoint}</li>`;
                 });
                 html += `</ul></div>`;
             }
@@ -276,7 +344,9 @@
                         <ul class="risk-points">
                 `;
                 sections.risks.forEach(risk => {
-                    html += `<li>${risk}</li>`;
+                    // Remove existing (N) prefix if present since <li> will auto-number
+                    const cleanRisk = risk.replace(/^\(\d+\)\s*/, '');
+                    html += `<li>${cleanRisk}</li>`;
                 });
                 html += `</ul></div>`;
             }
@@ -289,7 +359,9 @@
                         <ul class="waiting-points">
                 `;
                 sections.waiting.forEach(condition => {
-                    html += `<li>${condition}</li>`;
+                    // Remove existing (N) prefix if present since <li> will auto-number
+                    const cleanCondition = condition.replace(/^\(\d+\)\s*/, '');
+                    html += `<li>${cleanCondition}</li>`;
                 });
                 html += `</ul></div>`;
             }
@@ -330,8 +402,20 @@
                 justification: decision.justification
             };
 
+            // Add View Prompt button (user prompt only - market data)
+            const promptId = `prompt-${decision.id}`;
+            const hasUserPrompt = decision.user_prompt;
+
             html += `
                 <div class="raw-data-section">
+                    ${hasUserPrompt ? `
+                    <button class="raw-data-btn" onclick="togglePrompt('${promptId}')" style="margin-right: 8px;">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M3 2.5a2.5 2.5 0 0 1 5 0 2.5 2.5 0 0 1 5 0v.006c0 .07 0 .27-.038.494H15a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1v7.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 14.5V7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h2.038A2.968 2.968 0 0 1 3 2.506V2.5zm1.068.5H7v-.5a1.5 1.5 0 1 0-3 0c0 .085.002.274.045.43a.522.522 0 0 0 .023.07zM9 3h2.932a.56.56 0 0 0 .023-.07c.043-.156.045-.345.045-.43a1.5 1.5 0 0 0-3 0V3zM1 4v2h6V4H1zm8 0v2h6V4H9zm5 3H9v8h4.5a.5.5 0 0 0 .5-.5V7zm-7 8V7H2v7.5a.5.5 0 0 0 .5.5H7z"/>
+                        </svg>
+                        View Market Data Prompt
+                    </button>
+                    ` : ''}
                     <button class="raw-data-btn" onclick="toggleRawData('${rawDataId}')">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                             <path d="M5.854 4.646a.5.5 0 1 0-.708.708L8.293 8.5l-3.147 3.146a.5.5 0 0 0 .708.708l3.5-3.5a.5.5 0 0 0 0-.708l-3.5-3.5z"/>
@@ -339,6 +423,12 @@
                         </svg>
                         View Raw Data
                     </button>
+                    ${hasUserPrompt ? `
+                    <div class="raw-data-content" id="${promptId}" style="display: none;">
+                        <h4 style="margin-top: 0; color: #333;">Market Data Prompt:</h4>
+                        <pre><code>${decision.user_prompt || 'Not available'}</code></pre>
+                    </div>
+                    ` : ''}
                     <div class="raw-data-content" id="${rawDataId}" style="display: none;">
                         <pre><code>${JSON.stringify(rawData, null, 2)}</code></pre>
                     </div>
@@ -356,6 +446,7 @@
 
             if (element.style.display === 'none') {
                 element.style.display = 'block';
+                expandedSections.add(elementId);  // Track expanded state
                 button.innerHTML = `
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                         <path d="M7.247 11.14L2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z"/>
@@ -364,12 +455,63 @@
                 `;
             } else {
                 element.style.display = 'none';
+                expandedSections.delete(elementId);  // Remove from tracked state
                 button.innerHTML = `
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                         <path d="M5.854 4.646a.5.5 0 1 0-.708.708L8.293 8.5l-3.147 3.146a.5.5 0 0 0 .708.708l3.5-3.5a.5.5 0 0 0 0-.708l-3.5-3.5z"/>
                         <path d="M4.5 1a.5.5 0 0 0-.5.5v13a.5.5 0 0 0 .5.5h7a.5.5 0 0 0 .5-.5v-13a.5.5 0 0 0-.5-.5h-7zm0-1h7A1.5 1.5 0 0 1 13 1.5v13a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 3 14.5v-13A1.5 1.5 0 0 1 4.5 0z"/>
                     </svg>
                     View Raw Data
+                `;
+            }
+        }
+
+        // Toggle prompt visibility (for individual decision market data)
+        function togglePrompt(elementId) {
+            const element = document.getElementById(elementId);
+            const button = event.currentTarget;
+
+            if (element.style.display === 'none') {
+                element.style.display = 'block';
+                expandedSections.add(elementId);  // Track expanded state
+                button.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M7.247 11.14L2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z"/>
+                    </svg>
+                    Hide Market Data Prompt
+                `;
+            } else {
+                element.style.display = 'none';
+                expandedSections.delete(elementId);  // Remove from tracked state
+                button.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M3 2.5a2.5 2.5 0 0 1 5 0 2.5 2.5 0 0 1 5 0v.006c0 .07 0 .27-.038.494H15a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1v7.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 14.5V7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h2.038A2.968 2.968 0 0 1 3 2.506V2.5zm1.068.5H7v-.5a1.5 1.5 0 1 0-3 0c0 .085.002.274.045.43a.522.522 0 0 0 .023.07zM9 3h2.932a.56.56 0 0 0 .023-.07c.043-.156.045-.345.045-.43a1.5 1.5 0 0 0-3 0V3zM1 4v2h6V4H1zm8 0v2h6V4H9zm5 3H9v8h4.5a.5.5 0 0 0 .5-.5V7zm-7 8V7H2v7.5a.5.5 0 0 0 .5.5H7z"/>
+                    </svg>
+                    View Market Data Prompt
+                `;
+            }
+        }
+
+        // Toggle system prompt visibility
+        function toggleSystemPrompt() {
+            const element = document.getElementById('system-prompt-content');
+            const button = event.currentTarget;
+
+            if (element.style.display === 'none') {
+                element.style.display = 'block';
+                button.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M7.247 11.14L2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z"/>
+                    </svg>
+                    Hide System Prompt
+                `;
+            } else {
+                element.style.display = 'none';
+                button.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M3 2.5a2.5 2.5 0 0 1 5 0 2.5 2.5 0 0 1 5 0v.006c0 .07 0 .27-.038.494H15a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1v7.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 14.5V7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h2.038A2.968 2.968 0 0 1 3 2.506V2.5zm1.068.5H7v-.5a1.5 1.5 0 1 0-3 0c0 .085.002.274.045.43a.522.522 0 0 0 .023.07zM9 3h2.932a.56.56 0 0 0 .023-.07c.043-.156.045-.345.045-.43a1.5 1.5 0 0 0-3 0V3zM1 4v2h6V4H1zm8 0v2h6V4H9zm5 3H9v8h4.5a.5.5 0 0 0 .5-.5V7zm-7 8V7H2v7.5a.5.5 0 0 0 .5.5H7z"/>
+                    </svg>
+                    View System Prompt (Trading Instructions)
                 `;
             }
         }
@@ -382,9 +524,15 @@
 
                 document.getElementById('balance').textContent = formatCurrency(data.balance_usd || 0);
 
-                const pnlEl = document.getElementById('total-pnl');
-                pnlEl.textContent = formatCurrency(data.total_pnl || 0);
-                pnlEl.className = 'value ' + getPnLClass(data.total_pnl || 0);
+                // Realized PnL (from closed trades)
+                const realizedEl = document.getElementById('realized-pnl');
+                realizedEl.textContent = formatCurrency(data.realized_pnl || 0);
+                realizedEl.className = 'value ' + getPnLClass(data.realized_pnl || 0);
+
+                // Unrealized PnL (from open positions)
+                const unrealizedEl = document.getElementById('unrealized-pnl');
+                unrealizedEl.textContent = formatCurrency(data.unrealized_pnl || 0);
+                unrealizedEl.className = 'value ' + getPnLClass(data.unrealized_pnl || 0);
             } catch (error) {
                 console.error('Error fetching account data:', error);
             }
@@ -498,11 +646,24 @@
             }
         }
 
+        // Track expanded sections to preserve state across updates
+        let expandedSections = new Set();
+
         // Update decisions
         async function updateDecisions() {
             try {
                 const response = await fetch(API.decisions + '?limit=50');
-                allDecisions = await response.json();
+                const newDecisions = await response.json();
+
+                // Only update if there's actually new data
+                const hasNewData = JSON.stringify(newDecisions) !== JSON.stringify(allDecisions);
+
+                if (!hasNewData && allDecisions.length > 0) {
+                    // No changes, skip update to preserve expanded state
+                    return;
+                }
+
+                allDecisions = newDecisions;
 
                 if (allDecisions.length > 0) {
                     // Update total decisions count
@@ -516,11 +677,24 @@
                         navControls.style.display = 'none';
                     }
 
-                    // Reset to first decision on new data load
-                    currentDecisionIndex = 0;
+                    // Preserve current index if still valid, otherwise reset to 0
+                    if (currentDecisionIndex >= allDecisions.length) {
+                        currentDecisionIndex = 0;
+                    }
 
                     // Show current decision
                     showDecisionAtIndex(currentDecisionIndex);
+
+                    // Restore expanded sections
+                    setTimeout(() => {
+                        expandedSections.forEach(sectionId => {
+                            const element = document.getElementById(sectionId);
+                            if (element && element.style.display === 'none') {
+                                const button = element.previousElementSibling;
+                                if (button) button.click();
+                            }
+                        });
+                    }, 100);
 
                     // Show decision history (skip first one since it's shown as latest)
                     updateDecisionHistory();
@@ -617,13 +791,67 @@
             }
         }
 
+        // Update bot activity console
+        async function updateActivity() {
+            try {
+                const response = await fetch(API.status);
+                const data = await response.json();
+
+                const console = document.getElementById('activity-console');
+                const history = data.history || [];
+
+                if (history.length === 0) {
+                    console.innerHTML = '<div class="console-message">Waiting for bot activity...</div>';
+                } else {
+                    // Show last 10 activity logs in reverse chronological order
+                    let html = '';
+                    history.forEach(log => {
+                        const timestamp = formatRelativeTime(log.timestamp);
+                        const statusClass = log.status === 'error' ? 'error' :
+                                           log.status === 'running' ? 'running' :
+                                           'info';
+
+                        const message = log.message || log.error || 'No message';
+
+                        html += `
+                            <div class="console-message ${statusClass}">
+                                <span class="console-time">[${timestamp}]</span>
+                                <span class="console-status">${log.status.toUpperCase()}</span>
+                                <span class="console-text">${message}</span>
+                            </div>
+                        `;
+                    });
+
+                    console.innerHTML = html;
+
+                    // Auto-scroll to bottom to show latest activity
+                    console.scrollTop = console.scrollHeight;
+                }
+
+                // Load system prompt from most recent decision (only needs to be done once)
+                if (allDecisions.length > 0) {
+                    const latestDecision = allDecisions[0];
+                    const systemPromptText = document.getElementById('system-prompt-text');
+
+                    if (latestDecision.system_prompt) {
+                        systemPromptText.textContent = latestDecision.system_prompt;
+                    } else {
+                        systemPromptText.textContent = 'System prompt not available in database.';
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching activity:', error);
+            }
+        }
+
         // Update all data
         async function updateAll() {
             await Promise.all([
                 updateAccount(),
                 updateStatus(),
                 updateDecisions(),
-                updatePositions()
+                updatePositions(),
+                updateActivity()
             ]);
 
             document.getElementById('last-update').textContent = new Date().toLocaleTimeString('en-US', {

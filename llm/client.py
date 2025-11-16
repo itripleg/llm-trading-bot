@@ -9,6 +9,7 @@ comprehensive logging.
 from typing import Optional, Dict, Any
 import logging
 import time
+import sys
 
 from anthropic import Anthropic, APIError, RateLimitError, APIConnectionError
 from tenacity import (
@@ -91,6 +92,10 @@ class ClaudeClient:
             logger.debug(f"System prompt length: {len(system_prompt)} chars")
             logger.debug(f"User prompt length: {len(user_prompt)} chars")
 
+            # Console output for user visibility
+            print(f"  -> Sending request to Claude API...", flush=True)
+            print(f"  -> Waiting for response (this may take 10-30 seconds)...", flush=True)
+
             # Make API call
             response = self.client.messages.create(
                 model=self.model,
@@ -108,6 +113,9 @@ class ClaudeClient:
             elapsed = time.time() - start_time
             logger.info(f"Received Claude response in {elapsed:.2f}s")
 
+            # Console output for user visibility
+            print(f"  [OK] Response received in {elapsed:.2f}s", flush=True)
+
             # Extract response text
             if response.content and len(response.content) > 0:
                 response_text = response.content[0].text
@@ -120,27 +128,35 @@ class ClaudeClient:
                         f"Token usage: input={response.usage.input_tokens}, "
                         f"output={response.usage.output_tokens}"
                     )
+                    # Console output for token usage
+                    print(f"  [OK] Tokens used: {response.usage.input_tokens} in, {response.usage.output_tokens} out", flush=True)
 
                 return response_text
             else:
                 logger.error("No content in Claude response")
+                print(f"  [ERROR] No content in Claude response", flush=True)
                 return None
 
         except RateLimitError as e:
             logger.warning(f"Rate limit exceeded: {e}. Retrying...")
+            print(f"  [WARNING] Rate limit exceeded. Retrying...", flush=True)
             raise  # Will be retried by tenacity
 
         except APIConnectionError as e:
             logger.warning(f"API connection error: {e}. Retrying...")
+            print(f"  [WARNING] API connection error. Retrying...", flush=True)
             raise  # Will be retried by tenacity
 
         except APIError as e:
             logger.error(f"Claude API error: {e}")
+            print(f"  [ERROR] Claude API error: {e}", flush=True)
             return None
 
         except Exception as e:
             logger.error(f"Unexpected error calling Claude: {e}")
             logger.exception("Full traceback:")
+            print(f"  [ERROR] {e}", flush=True)
+            sys.stdout.flush()
             return None
 
     def test_connection(self) -> bool:
