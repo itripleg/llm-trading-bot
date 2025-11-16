@@ -175,7 +175,8 @@ class TradingAccount:
         side: str,
         entry_price: float,
         quantity_usd: float,
-        leverage: float
+        leverage: float,
+        decision_id: Optional[int] = None
     ) -> Optional[Position]:
         """
         Open a new position.
@@ -186,6 +187,7 @@ class TradingAccount:
             entry_price: Entry price in USD
             quantity_usd: Position size in USD
             leverage: Leverage multiplier
+            decision_id: ID of the decision that opened this position (for tracking)
 
         Returns:
             Position object if successful, None if insufficient balance
@@ -225,7 +227,8 @@ class TradingAccount:
             side=side,
             entry_price=entry_price,
             quantity_usd=quantity_usd,
-            leverage=leverage
+            leverage=leverage,
+            decision_id=decision_id
         )
 
         print(f"[OK] Opened {side} position: {position}")
@@ -307,6 +310,35 @@ class TradingAccount:
         equity = self.get_total_equity(current_prices)
         total_pnl = self.realized_pnl + unrealized_pnl
 
+        # Get open positions from database (includes exit plan from linked decision)
+        db_positions = get_open_positions()
+
+        # Build position list with enhanced data
+        positions_list = []
+        for pos in self.positions.values():
+            # Find matching DB position to get exit plan
+            db_pos = next((p for p in db_positions if p['coin'] == pos.coin), None)
+
+            pos_data = {
+                'coin': pos.coin,
+                'side': pos.side,
+                'entry_price': pos.entry_price,
+                'entry_time': pos.entry_time.isoformat(),
+                'current_price': current_prices.get(pos.coin, pos.entry_price),
+                'quantity_usd': pos.quantity_usd,
+                'leverage': pos.leverage,
+                'unrealized_pnl': pos.calculate_pnl(current_prices.get(pos.coin, pos.entry_price))
+            }
+
+            # Add exit plan if available from database
+            if db_pos:
+                pos_data['profit_target'] = db_pos.get('profit_target')
+                pos_data['stop_loss'] = db_pos.get('stop_loss')
+                pos_data['invalidation_condition'] = db_pos.get('invalidation_condition')
+                pos_data['entry_justification'] = db_pos.get('entry_justification')
+
+            positions_list.append(pos_data)
+
         return {
             'balance': self.balance,
             'equity': equity,
@@ -315,18 +347,7 @@ class TradingAccount:
             'total_pnl': total_pnl,
             'total_return_pct': (total_pnl / self.initial_balance) * 100,
             'num_positions': len(self.positions),
-            'positions': [
-                {
-                    'coin': pos.coin,
-                    'side': pos.side,
-                    'entry_price': pos.entry_price,
-                    'current_price': current_prices.get(pos.coin, pos.entry_price),
-                    'quantity_usd': pos.quantity_usd,
-                    'leverage': pos.leverage,
-                    'unrealized_pnl': pos.calculate_pnl(current_prices.get(pos.coin, pos.entry_price))
-                }
-                for pos in self.positions.values()
-            ]
+            'positions': positions_list
         }
 
     def __repr__(self):

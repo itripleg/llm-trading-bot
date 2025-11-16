@@ -91,13 +91,31 @@ def init_database():
                 entry_price REAL NOT NULL,
                 quantity_usd REAL NOT NULL,
                 leverage REAL NOT NULL,
+                decision_id INTEGER,
                 exit_time TEXT,
                 exit_price REAL,
                 realized_pnl REAL,
                 status TEXT DEFAULT 'open',
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (decision_id) REFERENCES decisions(id)
             )
         """)
+
+        # Migrate existing positions table to add decision_id if missing
+        try:
+            cursor.execute("SELECT decision_id FROM positions LIMIT 1")
+        except sqlite3.OperationalError:
+            # Column doesn't exist, add it
+            cursor.execute("ALTER TABLE positions ADD COLUMN decision_id INTEGER")
+            print("[DB Migration] Added decision_id column to positions table")
+
+        # Migrate decisions table to add prompt storage columns
+        try:
+            cursor.execute("SELECT system_prompt FROM decisions LIMIT 1")
+        except sqlite3.OperationalError:
+            cursor.execute("ALTER TABLE decisions ADD COLUMN system_prompt TEXT")
+            cursor.execute("ALTER TABLE decisions ADD COLUMN user_prompt TEXT")
+            print("[DB Migration] Added prompt columns to decisions table")
 
         # Bot status table - activity logs
         cursor.execute("""
@@ -132,13 +150,20 @@ def init_database():
 # DECISION OPERATIONS
 # ============================================================================
 
-def save_decision(decision_data: Dict[str, Any], raw_response: Optional[str] = None) -> int:
+def save_decision(
+    decision_data: Dict[str, Any],
+    raw_response: Optional[str] = None,
+    system_prompt: Optional[str] = None,
+    user_prompt: Optional[str] = None
+) -> int:
     """
     Save a Claude trading decision to the database.
 
     Args:
         decision_data: Dictionary with keys matching TradeDecision model
         raw_response: Optional raw JSON response from Claude
+        system_prompt: Optional system prompt sent to Claude
+        user_prompt: Optional user prompt sent to Claude
 
     Returns:
         The ID of the inserted decision
@@ -152,8 +177,9 @@ def save_decision(decision_data: Dict[str, Any], raw_response: Optional[str] = N
         cursor.execute("""
             INSERT INTO decisions (
                 timestamp, coin, signal, quantity_usd, leverage, confidence,
-                profit_target, stop_loss, invalidation_condition, justification, raw_response
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                profit_target, stop_loss, invalidation_condition, justification, raw_response,
+                system_prompt, user_prompt
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             timestamp,
             decision_data['coin'],
@@ -165,19 +191,39 @@ def save_decision(decision_data: Dict[str, Any], raw_response: Optional[str] = N
             exit_plan.get('stop_loss'),
             exit_plan.get('invalidation_condition'),
             decision_data['justification'],
-            raw_response
+            raw_response,
+            system_prompt,
+            user_prompt
         ))
 
         return cursor.lastrowid
 
 
 def get_recent_decisions(limit: int = 20) -> List[Dict[str, Any]]:
-    """Get the most recent trading decisions."""
+    """Get the most recent trading decisions with position data if available."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT * FROM decisions
-            ORDER BY timestamp DESC
+            SELECT
+                d.*,
+                p.entry_price,
+                p.exit_price,
+                p.realized_pnl
+            FROM decisions d
+            LEFT JOIN positions p ON (
+                -- For entry signals, match on decision_id
+                (d.signal IN ('buy_to_enter', 'sell_to_enter') AND d.id = p.decision_id)
+                OR
+                -- For hold/close signals, find the most recent position for that coin
+                (d.signal IN ('hold', 'close') AND d.coin = p.coin
+                 AND p.entry_time = (
+                     SELECT MAX(p2.entry_time)
+                     FROM positions p2
+                     WHERE p2.coin = d.coin
+                     AND p2.entry_time <= d.timestamp
+                 ))
+            )
+            ORDER BY d.timestamp DESC
             LIMIT ?
         """, (limit,))
 
@@ -267,7 +313,8 @@ def save_position_entry(
     side: str,
     entry_price: float,
     quantity_usd: float,
-    leverage: float
+    leverage: float,
+    decision_id: Optional[int] = None
 ) -> int:
     """Record a new position entry."""
     with get_db_connection() as conn:
@@ -278,9 +325,9 @@ def save_position_entry(
         cursor.execute("""
             INSERT INTO positions (
                 position_id, coin, side, entry_time, entry_price,
-                quantity_usd, leverage, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'open')
-        """, (position_id, coin, side, entry_time, entry_price, quantity_usd, leverage))
+                quantity_usd, leverage, decision_id, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open')
+        """, (position_id, coin, side, entry_time, entry_price, quantity_usd, leverage, decision_id))
 
         return cursor.lastrowid
 
@@ -302,13 +349,20 @@ def close_position(position_id: str, exit_price: float, realized_pnl: float) -> 
 
 
 def get_open_positions() -> List[Dict[str, Any]]:
-    """Get all currently open positions."""
+    """Get all currently open positions with their original exit plans."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT * FROM positions
-            WHERE status = 'open'
-            ORDER BY entry_time DESC
+            SELECT
+                p.*,
+                d.profit_target,
+                d.stop_loss,
+                d.invalidation_condition,
+                d.justification as entry_justification
+            FROM positions p
+            LEFT JOIN decisions d ON p.decision_id = d.id
+            WHERE p.status = 'open'
+            ORDER BY p.entry_time DESC
         """)
 
         return [dict(row) for row in cursor.fetchall()]

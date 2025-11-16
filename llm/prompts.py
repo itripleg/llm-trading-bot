@@ -26,18 +26,35 @@ Your goal is to maximize profit and loss (PnL) while managing risk appropriately
 - Manage multiple positions across different cryptocurrencies
 
 ## Trading Rules
-1. ALWAYS follow position sizing limits (max position size, max leverage)
+1. Follow position sizing limits (max position size, max leverage)
 2. NEVER exceed daily loss limits
 3. Set clear exit plans for every position (profit target, stop loss, invalidation)
 4. Be explicit about confidence levels (0.0 to 1.0)
 5. Provide clear justification for every decision
 6. Consider market context: funding rates, open interest, volume
 
+## Trade Conviction & Position Management
+- When you enter a position with HIGH confidence (≥70%), commit to your exit plan
+- Trust the exit plans you set - they are thoughtful and well-reasoned
+- Approaching invalidation is NOT the same as reaching it
+  * If invalidation is "RSI breaks below 40" and RSI is at 42, that's NOT invalidation
+  * Hold your conviction unless the condition is ACTUALLY triggered
+- Your confidence level at entry should guide holding behavior:
+  * High confidence (≥70%): Hold tight to your exit plan, resist premature exits
+  * Medium confidence (50-69%): Allow some flexibility if thesis weakens
+  * Lower confidence (<50%): More responsive to changing conditions
+- Only exit early if:
+  1. Invalidation condition is ACTUALLY triggered (not just approached)
+  2. New information fundamentally changes your original thesis
+  3. Profit target or stop loss is reached
+- Avoid premature exits - let your trades develop and work
+
 ## Risk Management
-- Higher leverage = higher risk = should have tighter stops
+- Set clear stops when entering and trust them
 - Consider liquidation prices when sizing positions
 - Monitor Sharpe ratio to maintain risk-adjusted performance
 - Respect daily loss limits to preserve capital
+- Balance caution with conviction - don't second-guess good analysis
 
 ## Output Format
 Return valid JSON with these exact fields:
@@ -178,6 +195,8 @@ IMPORTANT: Data is ordered OLDEST → NEWEST in all series."""
         positions: List[Dict[str, Any]],
         total_return_pct: float,
         sharpe_ratio: float,
+        trade_history: Optional[List[Dict[str, Any]]] = None,
+        recent_decisions: Optional[List[Dict[str, Any]]] = None,
     ) -> str:
         """
         Format current account state.
@@ -188,6 +207,8 @@ IMPORTANT: Data is ordered OLDEST → NEWEST in all series."""
             positions: List of open positions
             total_return_pct: Total return percentage
             sharpe_ratio: Current Sharpe ratio
+            trade_history: Optional list of recent closed positions
+            recent_decisions: Optional list of recent trading decisions
 
         Returns:
             Formatted account state string
@@ -204,15 +225,143 @@ IMPORTANT: Data is ordered OLDEST → NEWEST in all series."""
 
         if positions:
             lines.append("Current live positions & performance:")
-            for pos in positions:
-                lines.append(str(pos))
             lines.append("")
+            for pos in positions:
+                # Calculate time held
+                from datetime import datetime
+                entry_time = datetime.fromisoformat(pos['entry_time'])
+                time_held = datetime.now() - entry_time
+                hours_held = time_held.total_seconds() / 3600
+
+                lines.append(f"Position: {pos['coin']}")
+                lines.append(f"  Side: {pos['side'].upper()}")
+                lines.append(f"  Entry Price: ${pos['entry_price']:,.2f}")
+                lines.append(f"  Current Price: ${pos['current_price']:,.2f}")
+                lines.append(f"  Size: ${pos['quantity_usd']:.2f} ({pos['leverage']}x leverage)")
+                lines.append(f"  Unrealized P&L: ${pos['unrealized_pnl']:+,.2f}")
+                lines.append(f"  Time Held: {hours_held:.1f} hours")
+
+                # Show exit plan with emphasis and distance calculations
+                if pos.get('profit_target') or pos.get('stop_loss'):
+                    lines.append(f"  ")
+                    lines.append(f"  ⚡ YOUR ORIGINAL EXIT PLAN (Trust it!) ⚡")
+
+                    current_price = pos['current_price']
+                    entry_price = pos['entry_price']
+                    side = pos['side'].lower()
+
+                    if pos.get('profit_target'):
+                        target = pos['profit_target']
+                        if side == 'long':
+                            distance_pct = ((target - current_price) / current_price) * 100
+                        else:  # short
+                            distance_pct = ((current_price - target) / current_price) * 100
+                        lines.append(f"    - Profit Target: ${target:,.2f} ({distance_pct:+.2f}% away)")
+
+                    if pos.get('stop_loss'):
+                        stop = pos['stop_loss']
+                        if side == 'long':
+                            distance_pct = ((stop - current_price) / current_price) * 100
+                        else:  # short
+                            distance_pct = ((current_price - stop) / current_price) * 100
+                        lines.append(f"    - Stop Loss: ${stop:,.2f} ({distance_pct:+.2f}% away)")
+
+                    if pos.get('invalidation_condition'):
+                        lines.append(f"    - Invalidation: {pos['invalidation_condition']}")
+                        lines.append(f"      → Remember: APPROACHING invalidation ≠ invalidation reached")
+
+                # Show original justification with conviction reminder
+                if pos.get('entry_justification'):
+                    justification_preview = pos['entry_justification'][:100]
+                    lines.append(f"  ")
+                    lines.append(f"  Your original entry reasoning: {justification_preview}...")
+                    lines.append(f"  → Trust your analysis. Hold unless invalidation is ACTUALLY triggered.")
+
+                lines.append("")
         else:
             lines.append("Current live positions: None")
             lines.append("")
 
         lines.append(f"Sharpe Ratio: {sharpe_ratio:.3f}")
         lines.append("")
+
+        # Add trade history if available
+        if trade_history:
+            lines.append("### RECENT TRADE HISTORY")
+            lines.append("")
+            lines.append("Your last completed trades (most recent first):")
+            lines.append("")
+
+            for trade in trade_history:
+                from datetime import datetime
+                entry_time = datetime.fromisoformat(trade['entry_time'])
+                exit_time = datetime.fromisoformat(trade['exit_time']) if trade.get('exit_time') else None
+
+                if exit_time:
+                    duration = exit_time - entry_time
+                    hours_held = duration.total_seconds() / 3600
+                else:
+                    hours_held = 0
+
+                pnl = trade.get('realized_pnl', 0)
+                outcome = "WIN" if pnl > 0 else "LOSS" if pnl < 0 else "BREAK-EVEN"
+
+                lines.append(f"{trade['coin']} - {trade['side'].upper()} - {outcome}")
+                lines.append(f"  Entry: ${trade['entry_price']:,.2f} → Exit: ${trade.get('exit_price', 0):,.2f}")
+                lines.append(f"  P&L: ${pnl:+,.2f} ({trade['quantity_usd']:.0f} position, {trade['leverage']}x leverage)")
+                lines.append(f"  Held: {hours_held:.1f} hours")
+                lines.append("")
+
+            # Calculate win rate
+            wins = sum(1 for t in trade_history if t.get('realized_pnl', 0) > 0)
+            total_trades = len(trade_history)
+            win_rate = (wins / total_trades * 100) if total_trades > 0 else 0
+
+            lines.append(f"Recent Win Rate: {wins}/{total_trades} ({win_rate:.0f}%)")
+            lines.append("")
+
+        # Add decision history if available
+        if recent_decisions:
+            lines.append("### YOUR RECENT DECISIONS")
+            lines.append("")
+            lines.append("Your last decisions (most recent first):")
+            lines.append("")
+
+            for i, decision in enumerate(recent_decisions):
+                from datetime import datetime
+                timestamp = datetime.fromisoformat(decision['timestamp'])
+                time_ago = datetime.now() - timestamp
+                minutes_ago = time_ago.total_seconds() / 60
+
+                signal = decision['signal'].upper()
+                coin = decision['coin']
+                confidence = decision['confidence']
+
+                lines.append(f"[{minutes_ago:.0f} min ago] {coin} - {signal}")
+                lines.append(f"  Confidence: {confidence:.0%}")
+
+                if signal in ['BUY_TO_ENTER', 'SELL_TO_ENTER']:
+                    lines.append(f"  Size: ${decision['quantity_usd']:.0f} ({decision['leverage']}x leverage)")
+                    if decision.get('profit_target'):
+                        lines.append(f"  Target: ${decision['profit_target']:,.2f}")
+                    if decision.get('stop_loss'):
+                        lines.append(f"  Stop: ${decision['stop_loss']:,.2f}")
+
+                    # Add conviction reminder for recent entries
+                    if i == 0 and minutes_ago < 10:  # Most recent decision within 10 minutes
+                        if confidence >= 0.7:
+                            lines.append(f"  ⚡ HIGH confidence entry - trust your plan and let it develop")
+                        elif confidence >= 0.5:
+                            lines.append(f"  → Medium confidence entry - give it time to work")
+                        else:
+                            lines.append(f"  → Lower confidence - stay responsive to new information")
+
+                # Show brief justification
+                if decision.get('justification'):
+                    justification_preview = decision['justification'][:80]
+                    lines.append(f"  Reason: {justification_preview}...")
+
+                lines.append("")
 
         return "\n".join(lines)
 
@@ -274,6 +423,8 @@ IMPORTANT: Data is ordered OLDEST → NEWEST in all series."""
             positions=account_state.get('positions', []),
             total_return_pct=account_state.get('total_return_pct', 0),
             sharpe_ratio=account_state.get('sharpe_ratio', 0),
+            trade_history=account_state.get('trade_history', None),
+            recent_decisions=account_state.get('recent_decisions', None),
         )
         lines.append(account_section)
 

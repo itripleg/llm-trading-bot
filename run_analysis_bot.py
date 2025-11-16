@@ -26,6 +26,7 @@ from llm.parser import parse_llm_response
 from trading.logger import TradingLogger
 from trading.account import TradingAccount
 from config.settings import settings
+from web.database import get_closed_positions, get_recent_decisions
 
 # Control file for start/stop
 CONTROL_FILE = Path(__file__).parent / "data" / "bot_control.txt"
@@ -56,7 +57,7 @@ def signal_handler(sig, frame):
     sys.exit(0)
 
 
-def run_analysis_cycle(account: TradingAccount):
+def run_analysis_cycle(account: TradingAccount, start_time: datetime):
     """
     Run one analysis cycle:
     1. Fetch market data for all configured assets
@@ -67,6 +68,7 @@ def run_analysis_cycle(account: TradingAccount):
 
     Args:
         account: TradingAccount instance to track balance and positions
+        start_time: Bot start time to calculate minutes since start
 
     Returns:
         bool: True if successful, False if error
@@ -152,16 +154,27 @@ def run_analysis_cycle(account: TradingAccount):
             }
         }
 
+        # Get trade history for context (last 10 closed positions)
+        trade_history = get_closed_positions(limit=10)
+
+        # Get recent decisions for context (last 5 decisions)
+        recent_decisions = get_recent_decisions(limit=5)
+
         account_state = {
             'available_cash': account.balance,
             'total_value': account_summary['equity'],
             'total_return_pct': account_summary['total_return_pct'],
             'sharpe_ratio': 0.0,  # TODO: Calculate Sharpe ratio
             'positions': account_summary['positions'],
+            'trade_history': trade_history,
+            'recent_decisions': recent_decisions,
         }
 
+        # Calculate minutes since bot started
+        minutes_since_start = int((datetime.now() - start_time).total_seconds() / 60)
+
         system_prompt = get_system_prompt()
-        user_prompt = build_user_prompt(market_data, account_state, 0)
+        user_prompt = build_user_prompt(market_data, account_state, minutes_since_start)
 
         # Get Claude's decision
         print(f"\n[4/4] Getting Claude's analysis...", flush=True)
@@ -180,8 +193,20 @@ def run_analysis_cycle(account: TradingAccount):
             print("  [FAIL] Could not parse response", flush=True)
             return False
 
-        # Log decision to database
-        logger.log_decision_from_trade_decision(decision, raw_response=response)
+        # For hold decisions, populate with current position details if available
+        if decision.signal.value == 'hold' and coin in account.positions:
+            position = account.positions[coin]
+            decision.quantity_usd = position.quantity_usd
+            decision.leverage = position.leverage
+            print(f"  [HOLD] Populated with current position: ${position.quantity_usd:.2f} @ {position.leverage}x", flush=True)
+
+        # Log decision to database (save both the response AND the prompts sent to Claude)
+        decision_id = logger.log_decision_from_trade_decision(
+            decision,
+            raw_response=response,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt
+        )
 
         # Execute decision (paper trading)
         print(f"\n[EXECUTION] Executing decision: {decision.signal.value.upper()}", flush=True)
@@ -194,7 +219,8 @@ def run_analysis_cycle(account: TradingAccount):
                     side='long',
                     entry_price=current_price,
                     quantity_usd=decision.quantity_usd,
-                    leverage=decision.leverage
+                    leverage=decision.leverage,
+                    decision_id=decision_id
                 )
             else:
                 print(f"  [REJECTED] Insufficient balance", flush=True)
@@ -209,7 +235,8 @@ def run_analysis_cycle(account: TradingAccount):
                     side='short',
                     entry_price=current_price,
                     quantity_usd=decision.quantity_usd,
-                    leverage=decision.leverage
+                    leverage=decision.leverage,
+                    decision_id=decision_id
                 )
             else:
                 print(f"  [REJECTED] Insufficient balance", flush=True)
@@ -290,6 +317,10 @@ def run_bot():
     write_control_state("running")
     RUNNING = True
 
+    # Track bot start time
+    start_time = datetime.now()
+    print(f"Bot started at: {start_time.strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
+
     cycle_count = 0
 
     try:
@@ -313,7 +344,7 @@ def run_bot():
             print(f"\n{'='*70}", flush=True)
             print(f"CYCLE #{cycle_count}", flush=True)
 
-            success = run_analysis_cycle(account)
+            success = run_analysis_cycle(account, start_time)
 
             if success:
                 print(f"\n[OK] Cycle #{cycle_count} complete", flush=True)
@@ -330,15 +361,24 @@ def run_bot():
             # Sleep in small chunks so we can respond to stop quickly
             # Show countdown every 30 seconds
             for i in range(wait_time):
-                if read_control_state() != "running":
-                    break
+                try:
+                    # Check control state with error handling
+                    state = read_control_state()
+                    if state != "running":
+                        print(f"[!] Bot state changed to: {state}", flush=True)
+                        break
 
-                # Show progress every 30 seconds
-                if i > 0 and i % 30 == 0:
-                    remaining = wait_time - i
-                    print(f"    [{remaining}s remaining...]", flush=True)
+                    # Show progress every 30 seconds
+                    if i > 0 and i % 30 == 0:
+                        remaining = wait_time - i
+                        print(f"    [{remaining}s remaining...]", flush=True)
 
-                time.sleep(1)
+                    time.sleep(1)
+                except Exception as e:
+                    # Log any errors but continue waiting
+                    print(f"[WARNING] Error during wait: {e}", flush=True)
+                    time.sleep(1)
+                    continue
 
     except KeyboardInterrupt:
         print("\n\n[!] Bot stopped by user", flush=True)
