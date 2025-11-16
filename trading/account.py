@@ -277,6 +277,68 @@ class TradingAccount:
 
         return pnl
 
+    def calculate_sharpe_ratio(self, risk_free_rate: float = 0.0) -> Optional[float]:
+        """
+        Calculate Sharpe ratio from closed trade history.
+
+        Sharpe Ratio = (Mean Return - Risk Free Rate) / Std Dev of Returns
+
+        This measures risk-adjusted performance. Higher is better.
+        - > 1.0 is good
+        - > 2.0 is very good
+        - > 3.0 is excellent
+
+        Args:
+            risk_free_rate: Annual risk-free rate (default 0.0 for crypto)
+
+        Returns:
+            Sharpe ratio, or None if insufficient data (< 2 trades)
+        """
+        import numpy as np
+
+        try:
+            # Get closed positions from database
+            closed_positions = get_closed_positions(limit=500)
+
+            if len(closed_positions) < 2:
+                # Need at least 2 trades to calculate standard deviation
+                return None
+
+            # Calculate returns for each trade as % of capital risked
+            returns = []
+            for pos in closed_positions:
+                realized_pnl = pos.get('realized_pnl')
+                quantity_usd = pos.get('quantity_usd')
+
+                if realized_pnl is not None and quantity_usd and quantity_usd > 0:
+                    # Return as % of capital risked (margin)
+                    trade_return = (realized_pnl / quantity_usd) * 100  # in %
+                    returns.append(trade_return)
+
+            if len(returns) < 2:
+                return None
+
+            returns_array = np.array(returns)
+
+            # Calculate mean and std dev of returns
+            mean_return = np.mean(returns_array)
+            std_return = np.std(returns_array, ddof=1)  # Sample std dev
+
+            if std_return == 0:
+                # No volatility (all trades same return) - edge case
+                return None
+
+            # Calculate Sharpe ratio
+            # Note: We're using per-trade returns, not annualized
+            # For daily/weekly trading, this gives a rough risk-adjusted metric
+            sharpe = (mean_return - risk_free_rate) / std_return
+
+            return sharpe
+
+        except Exception as e:
+            print(f"[WARNING] Error calculating Sharpe ratio: {e}")
+            return None
+
     def save_state(self, current_prices: Dict[str, float]):
         """
         Save current account state to database.
@@ -287,12 +349,15 @@ class TradingAccount:
         unrealized_pnl = self.get_unrealized_pnl(current_prices)
         equity = self.get_total_equity(current_prices)
 
+        # Calculate Sharpe ratio from trade history
+        sharpe_ratio = self.calculate_sharpe_ratio()
+
         save_account_state(
             balance_usd=self.balance,
             equity_usd=equity,
             unrealized_pnl=unrealized_pnl,
             realized_pnl=self.realized_pnl,
-            sharpe_ratio=None,  # TODO: Calculate Sharpe ratio
+            sharpe_ratio=sharpe_ratio,
             num_positions=len(self.positions)
         )
 

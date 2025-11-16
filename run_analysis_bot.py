@@ -25,6 +25,7 @@ from llm.prompts import get_system_prompt, build_user_prompt
 from llm.parser import parse_llm_response
 from trading.logger import TradingLogger
 from trading.account import TradingAccount
+from trading.risk import RiskManager
 from config.settings import settings
 from web.database import get_closed_positions, get_recent_decisions
 
@@ -103,6 +104,18 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime):
         current_price = ohlcv['close'].iloc[-1]
         print(f"  [OK] Current price: ${current_price:,.2f}", flush=True)
 
+        # Display risk summary
+        print(f"\n[RISK STATUS]", flush=True)
+        risk_manager = RiskManager(account)
+        risk_summary = risk_manager.get_risk_summary({coin: current_price})
+        print(f"  Balance: ${risk_summary['available_balance']:.2f}", flush=True)
+        print(f"  Daily P&L: ${risk_summary['daily_pnl']:+.2f} / Limit: ${risk_summary['daily_loss_limit']:.2f}", flush=True)
+        if risk_summary['trading_halted']:
+            print(f"  ⚠️  TRADING HALTED - Daily loss limit exceeded!", flush=True)
+        if risk_summary['positions_at_risk'] > 0:
+            print(f"  ⚠️  {risk_summary['positions_at_risk']} position(s) approaching liquidation!", flush=True)
+        print(f"  Open Positions: {risk_summary['num_positions']}", flush=True)
+
         # Calculate indicators
         print(f"\n[3/4] Calculating indicators...", flush=True)
         data_with_indicators = TechnicalIndicators.calculate_all(ohlcv)
@@ -160,11 +173,14 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime):
         # Get recent decisions for context (last 5 decisions)
         recent_decisions = get_recent_decisions(limit=5)
 
+        # Calculate Sharpe ratio from trade history
+        sharpe_ratio = account.calculate_sharpe_ratio()
+
         account_state = {
             'available_cash': account.balance,
             'total_value': account_summary['equity'],
             'total_return_pct': account_summary['total_return_pct'],
-            'sharpe_ratio': 0.0,  # TODO: Calculate Sharpe ratio
+            'sharpe_ratio': sharpe_ratio if sharpe_ratio is not None else 0.0,
             'positions': account_summary['positions'],
             'trade_history': trade_history,
             'recent_decisions': recent_decisions,
@@ -207,6 +223,20 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime):
             system_prompt=system_prompt,
             user_prompt=user_prompt
         )
+
+        # === RISK VALIDATION ===
+        # Validate trade against all safety limits BEFORE execution
+        risk_manager = RiskManager(account)
+        is_valid, rejection_reason = risk_manager.validate_trade(decision, current_price)
+
+        if not is_valid:
+            print(f"\n[RISK CHECK] ❌ TRADE REJECTED", flush=True)
+            print(f"  Reason: {rejection_reason}", flush=True)
+            print(f"  Decision: {decision.signal.value.upper()} {coin} ${decision.quantity_usd:.2f} @ {decision.leverage}x", flush=True)
+            return True  # Continue bot loop (don't crash on rejection)
+
+        # Trade passed risk validation
+        print(f"[RISK CHECK] ✅ Trade validated", flush=True)
 
         # Execute decision (paper trading)
         print(f"\n[EXECUTION] Executing decision: {decision.signal.value.upper()}", flush=True)
