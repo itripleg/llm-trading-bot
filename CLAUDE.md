@@ -19,53 +19,75 @@ Key specs:
 ## Core Architecture
 
 ```
-alpha-arena-mini/
-├── .progress/              # Documentation and phase tracking
+llm-trading-bot/
+├── documentation/          # Project documentation
 │   ├── START_HERE.md      # Entry point - read first
 │   ├── PROJECT_PLAN.md    # Detailed phase-by-phase tasks
 │   ├── CHANGELOG.md       # Track all changes
-│   └── PROMPT.md          # AI agent context
+│   ├── PROMPT.md          # AI agent context
+│   ├── QUICKSTART.md      # Quick start guide
+│   └── README.md          # Project README
 │
 ├── config/                 # Configuration management
 │   └── settings.py        # Pydantic-based settings, env var loading
 │
 ├── data/                   # Market data layer
 │   ├── fetcher.py         # Hyperliquid API integration via ccxt
-│   ├── indicators.py      # Technical indicators (EMA, RSI, MACD, ATR)
-│   └── storage.py         # Optional historical data persistence
+│   └── indicators.py      # Technical indicators (EMA, RSI, MACD, ATR)
 │
 ├── llm/                    # LLM integration
 │   ├── client.py          # Anthropic Claude API client
 │   ├── prompts.py         # Prompt templates for trading decisions
 │   └── parser.py          # Parse and validate Claude JSON responses
 │
-├── trading/                # Execution and risk management
-│   ├── executor.py        # Order placement on Hyperliquid
-│   ├── position.py        # Position tracking and management
-│   ├── risk.py            # Risk checks (position size, leverage, daily loss)
-│   ├── simulator.py       # Paper trading simulator
-│   └── account.py         # Account state management
+├── trading/                # Position management and logging
+│   ├── account.py         # Paper trading account simulation
+│   └── logger.py          # Trading activity logging wrapper
 │
-├── orchestrator/           # Main bot orchestration
-│   ├── harness.py         # Main trading loop (2-3 min cycle)
-│   └── scheduler.py       # Execution timing and coordination
+├── web/                    # Web interface for monitoring
+│   ├── app.py             # Flask server with API endpoints
+│   ├── database.py        # SQLite persistence layer
+│   ├── templates/         # Dashboard HTML templates
+│   └── static/            # CSS and static assets
 │
-├── web/                    # Web interface for monitoring (optional)
-│   ├── app.py             # Flask/FastAPI server
-│   ├── routes.py          # API endpoints for dashboard
-│   └── templates/         # Dashboard templates
+├── tests/                  # Test suite
+│   ├── test_setup.py      # Dependency verification
+│   ├── test_integration.py # End-to-end pipeline tests
+│   └── test_real_data.py  # Real API integration tests
 │
-├── analysis/               # Performance tracking and analysis
-│   ├── metrics.py         # Sharpe ratio, PnL, statistics
-│   └── reporting.py       # Report generation
+├── scripts/                # Utility scripts
+│   └── clear_database.py  # Database reset utility
 │
-├── logs/                   # Runtime logs and trade history
-├── tests/                  # Unit and integration tests
+├── logs/                   # Runtime logs (gitignored)
+├── data/                   # Database storage (trading_bot.db)
 ├── blogpost.txt           # Nof1 Alpha Arena blog post (reference)
 ├── .env.example           # Environment variable template
 ├── requirements.txt       # Python dependencies
-└── main.py                # Entry point
+├── pytest.ini             # Pytest configuration
+├── start_bot.py           # Main entry point - starts web + bot
+├── start_bot.bat          # Windows startup script
+└── run_analysis_bot.py    # Trading loop (2-3 min cycle)
 ```
+
+### Current Implementation Status
+
+**Implemented & Working:**
+- ✅ Market data fetching (data/fetcher.py)
+- ✅ Technical indicators (data/indicators.py)
+- ✅ Claude API integration (llm/client.py)
+- ✅ Prompt engineering (llm/prompts.py)
+- ✅ Response parsing & validation (llm/parser.py)
+- ✅ Paper trading simulation (trading/account.py)
+- ✅ Database persistence (web/database.py)
+- ✅ Web dashboard (web/app.py)
+- ✅ Trading loop orchestration (run_analysis_bot.py)
+
+**Not Yet Implemented (Needed for Live Trading):**
+- ❌ Risk enforcement module (trading/risk.py)
+- ❌ Live order execution (trading/executor.py)
+- ❌ Stop-loss monitoring
+- ❌ Sharpe ratio calculation (currently hardcoded to 0.0)
+- ❌ Performance metrics & reporting
 
 ## Development Workflow
 
@@ -98,24 +120,29 @@ cp .env.example .env
 # Edit .env with your API keys and trading settings
 
 # Test configuration
-python test_setup.py
+python tests/test_setup.py
 
 # Test individual modules
 python data/fetcher.py                   # Test market data fetching
 python data/indicators.py                # Test indicator calculations
 python llm/client.py                     # Test LLM integration
 
-# Run paper trading
-python main.py --mode paper
+# Run paper trading (starts web dashboard + trading bot)
+python start_bot.py                      # Main entry point
+# OR on Windows:
+start_bot.bat
 
-# Run live trading (after validation)
-python main.py --mode live --capital 100
+# Run trading bot only (without web dashboard)
+python run_analysis_bot.py
 
-# Run web interface for monitoring
+# Run web interface only (for monitoring)
 python web/app.py                        # Starts dashboard on localhost:5000
 
 # Run tests
 pytest tests/
+
+# Clear database (with confirmation)
+python scripts/clear_database.py
 ```
 
 ## Critical Safety Guidelines
@@ -138,7 +165,7 @@ These are non-negotiable:
    - Manual stop button to pause trading immediately
    - Close all positions function
    - Pause trading mode
-   - Kill switch in orchestrator/harness.py
+   - Kill switch in run_analysis_bot.py (via data/bot_control.txt)
 
 4. **Risk checks** (trading/risk.py) must block trades that violate:
    - Maximum position size
@@ -181,18 +208,19 @@ These are non-negotiable:
 - Request/response validation
 - Rate limit handling
 
-### Execution Loop (orchestrator/harness.py)
-- **Every 2-3 minutes:**
+### Execution Loop (run_analysis_bot.py)
+- **Every 2-3 minutes (configurable via EXECUTION_INTERVAL_SECONDS):**
   1. Fetch market data for all configured assets
   2. Calculate technical indicators
   3. Get current account state (positions, cash, PnL, Sharpe ratio)
   4. Format into prompt with all market and account data
   5. Send to Claude for decision
   6. Parse and validate response
-  7. Apply risk checks
-  8. Execute approved trades
-  9. Log everything
-  10. Wait for next cycle
+  7. Execute trades (paper trading simulation)
+  8. Log everything to database
+  9. Wait for next cycle
+
+**Note**: Risk checks (step 7) not yet implemented - needed for live trading
 
 ### Claude Prompt Structure (llm/prompts.py)
 Based on Alpha Arena design, prompt must provide:
@@ -217,20 +245,25 @@ Based on Alpha Arena design, prompt must provide:
   }
   ```
 
-### Paper Trading (trading/simulator.py)
+### Paper Trading (trading/account.py)
+Current implementation:
 - Simulates instant fills at market price
 - Tracks positions with entry price and unrealized PnL
-- Charges realistic fees (0.02% taker like Hyperliquid)
-- Allows testing without real capital
+- Manages account balance and equity
+- Persists state to database (data/trading_bot.db)
+- Does NOT charge fees (TODO for realism)
+- Prevents overlapping positions per coin
 
-### Risk Management (trading/risk.py)
-- Validates every trade against safety limits
-- Blocks violating orders before execution
-- Logs all blocked trades for debugging
-- Never allows emergency overrides of safety checks
+### Risk Management (trading/risk.py) - NOT YET IMPLEMENTED ⚠️
+**Critical gap for live trading** - needs implementation:
+- Should validate every trade against safety limits
+- Should block violating orders before execution
+- Should log all blocked trades for debugging
+- Should calculate liquidation prices
+- Should enforce daily loss limits
 
-### Web Interface (web/app.py - Phase 6)
-Monitor bot activity via dashboard:
+### Web Interface (web/app.py) - ✅ IMPLEMENTED
+Monitor bot activity via dashboard (http://localhost:5000):
 - Real-time account balance and PnL
 - Current positions with unrealized gains/losses
 - Trade history with entry/exit times and fills
@@ -253,18 +286,21 @@ From Alpha Arena findings, track these patterns:
 
 To run multiple instances with different configurations:
 
-1. Create separate .env files: `.env.claude1`, `.env.claude2`, etc.
-2. Run instances with different environment files:
+1. Create separate .env files: `.env.instance1`, `.env.instance2`, etc.
+2. Run instances with different environment files and web ports:
    ```bash
    # Terminal 1
-   DOTENV_FILE=.env.claude1 python main.py --mode paper
+   DOTENV_FILE=.env.instance1 python start_bot.py
 
    # Terminal 2
-   DOTENV_FILE=.env.claude2 python main.py --mode paper
+   # Modify web port in instance2 config or run bot only:
+   DOTENV_FILE=.env.instance2 python run_analysis_bot.py
    ```
-3. Each instance maintains separate logs and position tracking
+3. Each instance maintains separate database (configure different DB paths)
 4. Ensure different API keys and account configurations
-5. Web interface can aggregate data from all instances
+5. Each instance needs its own web port for dashboard access
+
+**Note**: Currently, multiple instances will share the same database. For true isolation, modify `web/database.py` to use instance-specific database paths.
 
 ## Testing Strategy
 
