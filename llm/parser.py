@@ -46,7 +46,7 @@ class TradeDecision(BaseModel):
     coin: str = Field(description="Trading pair symbol")
     signal: TradeSignal = Field(description="Trade signal (buy/sell/hold/close)")
     quantity_usd: float = Field(ge=0, description="Position size in USD")
-    leverage: float = Field(gt=0, le=20, description="Leverage multiplier")
+    leverage: float = Field(ge=0, le=20, description="Leverage multiplier (0 for hold/close)")
     confidence: float = Field(ge=0, le=1, description="Confidence score (0-1)")
     exit_plan: ExitPlan = Field(description="Exit plan with targets and stops")
     justification: str = Field(min_length=10, description="Reasoning for the decision")
@@ -67,6 +67,21 @@ class TradeDecision(BaseModel):
             raise ValueError("Quantity cannot be negative")
         if v > 1000000:
             raise ValueError("Quantity exceeds reasonable limit")
+        return v
+
+    @field_validator("leverage")
+    @classmethod
+    def validate_leverage(cls, v: float, info) -> float:
+        """Validate leverage is appropriate for signal type."""
+        # Get signal from values dict (if available during validation)
+        signal = info.data.get('signal') if hasattr(info, 'data') else None
+
+        # For entry signals, leverage must be > 0
+        if signal in [TradeSignal.BUY_TO_ENTER, TradeSignal.SELL_TO_ENTER]:
+            if v <= 0:
+                raise ValueError("Leverage must be greater than 0 for entry signals")
+
+        # For hold/close, leverage can be 0
         return v
 
     def is_actionable(self) -> bool:
