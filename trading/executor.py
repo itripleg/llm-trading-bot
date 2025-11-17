@@ -94,9 +94,17 @@ class HyperliquidExecutor:
 
         Returns:
             Dict with account_value, margin_used, positions, etc.
+            Returns empty dict {} on error.
         """
         try:
             user_state = self.info.user_state(self.address)
+
+            # Check if we got valid data
+            if not user_state or "marginSummary" not in user_state:
+                logger.error("Hyperliquid returned invalid/empty state")
+                logger.error("This may indicate geographic restrictions or API issues")
+                return {}
+
             margin_summary = user_state["marginSummary"]
 
             return {
@@ -106,8 +114,13 @@ class HyperliquidExecutor:
                 "total_raw_usd": float(margin_summary["totalRawUsd"]),
                 "positions": user_state.get("assetPositions", [])
             }
+        except KeyError as e:
+            logger.error(f"Failed to parse account state - missing key: {e}")
+            logger.error("This may indicate API format changes or corrupted response")
+            return {}
         except Exception as e:
             logger.error(f"Failed to get account state: {e}")
+            logger.error("Possible causes: geo-restrictions, network issues, or invalid credentials")
             return {}
 
     def set_leverage(self, coin: str, leverage: int, is_cross: bool = True) -> bool:

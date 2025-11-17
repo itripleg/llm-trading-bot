@@ -82,6 +82,25 @@ def get_current_account_state(
         try:
             hl_state = executor.get_account_state()
 
+            # Check if we got valid data
+            if not hl_state:
+                print("[WARNING] Hyperliquid returned empty state", flush=True)
+                print("  This may indicate:", flush=True)
+                print("    - API connection issues", flush=True)
+                print("    - Geographic restrictions (Hyperliquid blocks some regions)", flush=True)
+                print("    - Network connectivity problems", flush=True)
+                print("  You should still be able to query, but trading may be restricted", flush=True)
+                # Return empty state
+                return {
+                    'balance': 0,
+                    'equity': 0,
+                    'unrealized_pnl': 0,
+                    'realized_pnl': 0,
+                    'total_pnl': 0,
+                    'num_positions': 0,
+                    'positions': []
+                }
+
             # Get positions from Hyperliquid
             positions_list = []
             for asset_pos in hl_state.get('positions', []):
@@ -90,6 +109,8 @@ def get_current_account_state(
                 size = float(pos.get('szi', 0))
 
                 if abs(size) > 0:  # Has open position
+                    # NOTE: Hyperliquid doesn't provide entry_time, so we use a placeholder
+                    # For accurate tracking, positions should be logged to DB when opened
                     positions_list.append({
                         'coin': f"{coin}/USDC:USDC",
                         'side': 'long' if size > 0 else 'short',
@@ -97,7 +118,8 @@ def get_current_account_state(
                         'current_price': float(pos.get('entryPx', 0)),  # TODO: Get live price
                         'quantity_usd': float(pos.get('marginUsed', 0)),
                         'leverage': pos.get('leverage', {}).get('value', 1),
-                        'unrealized_pnl': float(pos.get('unrealizedPnl', 0))
+                        'unrealized_pnl': float(pos.get('unrealizedPnl', 0)),
+                        'entry_time': None  # Hyperliquid doesn't track this - use DB instead
                     })
 
             return {
@@ -110,7 +132,18 @@ def get_current_account_state(
                 'positions': positions_list
             }
         except Exception as e:
-            print(f"[ERROR] Failed to get live account state: {e}", flush=True)
+            print(f"\n[ERROR] Failed to get live account state from Hyperliquid", flush=True)
+            print(f"  Error details: {e}", flush=True)
+            print(f"\n  Possible causes:", flush=True)
+            print(f"    1. Geographic restrictions - Hyperliquid blocks certain regions", flush=True)
+            print(f"       If you're in a blocked region, you cannot query OR trade", flush=True)
+            print(f"       Solution: Use a VPN or move to a supported region", flush=True)
+            print(f"    2. Network connectivity issues", flush=True)
+            print(f"       Solution: Check your internet connection", flush=True)
+            print(f"    3. Invalid API credentials", flush=True)
+            print(f"       Solution: Check HYPERLIQUID_WALLET_PRIVATE_KEY in .env", flush=True)
+            print(f"    4. Hyperliquid API downtime", flush=True)
+            print(f"       Solution: Check https://status.hyperliquid.xyz/", flush=True)
             import traceback
             traceback.print_exc()
             # Return empty state on error

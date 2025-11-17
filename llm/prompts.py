@@ -227,11 +227,16 @@ IMPORTANT: Data is ordered OLDEST → NEWEST in all series."""
             lines.append("Current live positions & performance:")
             lines.append("")
             for pos in positions:
-                # Calculate time held
+                # Calculate time held (if entry_time is available)
                 from datetime import datetime
-                entry_time = datetime.fromisoformat(pos['entry_time'])
-                time_held = datetime.now() - entry_time
-                hours_held = time_held.total_seconds() / 3600
+                hours_held = None
+                if pos.get('entry_time'):
+                    try:
+                        entry_time = datetime.fromisoformat(pos['entry_time'])
+                        time_held = datetime.now() - entry_time
+                        hours_held = time_held.total_seconds() / 3600
+                    except (ValueError, TypeError):
+                        hours_held = None
 
                 lines.append(f"Position: {pos['coin']}")
                 lines.append(f"  Side: {pos['side'].upper()}")
@@ -239,7 +244,10 @@ IMPORTANT: Data is ordered OLDEST → NEWEST in all series."""
                 lines.append(f"  Current Price: ${pos['current_price']:,.2f}")
                 lines.append(f"  Size: ${pos['quantity_usd']:.2f} ({pos['leverage']}x leverage)")
                 lines.append(f"  Unrealized P&L: ${pos['unrealized_pnl']:+,.2f}")
-                lines.append(f"  Time Held: {hours_held:.1f} hours")
+                if hours_held is not None:
+                    lines.append(f"  Time Held: {hours_held:.1f} hours")
+                else:
+                    lines.append(f"  Time Held: Unknown (position opened before tracking)")
 
                 # Show exit plan with emphasis and distance calculations
                 if pos.get('profit_target') or pos.get('stop_loss'):
@@ -294,14 +302,18 @@ IMPORTANT: Data is ordered OLDEST → NEWEST in all series."""
 
             for trade in trade_history:
                 from datetime import datetime
-                entry_time = datetime.fromisoformat(trade['entry_time'])
-                exit_time = datetime.fromisoformat(trade['exit_time']) if trade.get('exit_time') else None
+                hours_held = None
 
-                if exit_time:
-                    duration = exit_time - entry_time
-                    hours_held = duration.total_seconds() / 3600
-                else:
-                    hours_held = 0
+                # Safely parse entry and exit times
+                try:
+                    if trade.get('entry_time'):
+                        entry_time = datetime.fromisoformat(trade['entry_time'])
+                        if trade.get('exit_time'):
+                            exit_time = datetime.fromisoformat(trade['exit_time'])
+                            duration = exit_time - entry_time
+                            hours_held = duration.total_seconds() / 3600
+                except (ValueError, TypeError):
+                    hours_held = None
 
                 pnl = trade.get('realized_pnl', 0)
                 outcome = "WIN" if pnl > 0 else "LOSS" if pnl < 0 else "BREAK-EVEN"
@@ -309,7 +321,10 @@ IMPORTANT: Data is ordered OLDEST → NEWEST in all series."""
                 lines.append(f"{trade['coin']} - {trade['side'].upper()} - {outcome}")
                 lines.append(f"  Entry: ${trade['entry_price']:,.2f} → Exit: ${trade.get('exit_price', 0):,.2f}")
                 lines.append(f"  P&L: ${pnl:+,.2f} ({trade['quantity_usd']:.0f} position, {trade['leverage']}x leverage)")
-                lines.append(f"  Held: {hours_held:.1f} hours")
+                if hours_held is not None:
+                    lines.append(f"  Held: {hours_held:.1f} hours")
+                else:
+                    lines.append(f"  Held: Unknown")
                 lines.append("")
 
             # Calculate win rate
