@@ -573,4 +573,119 @@ Use these section headers as you progress:
 
 ---
 
-**Next Entry**: Phase 3 - Paper Trading Simulator →
+### 2025-11-16 - Phase 3: Trading Conviction System & Dashboard Enhancements
+**Issue**: Bot was overly cautious, closing positions prematurely and lacking conviction in exit plans
+**Solution**: Implemented conviction-based trading system with comprehensive dashboard monitoring
+
+**Changes**:
+- 🟢 **Trading Conviction System** (llm/prompts.py):
+  - Added "Trade Conviction & Position Management" section to system prompt
+  - Emphasize trusting exit plans and avoiding premature exits
+  - Clarified distinction between "approaching invalidation" vs "actually reaching it"
+  - Confidence-based holding guidance (70%+ = strong conviction)
+  - Enhanced position display showing distance to profit targets and stop losses
+  - Added trade history and recent decisions to prompt context for better memory
+
+- 🟢 **Dashboard Monitoring Enhancements** (web/templates/dashboard.html, web/static/style.css):
+  - Split PnL display: Realized vs Unrealized gains shown separately in header
+  - Entry/exit price display on decision cards (buy/sell shows entry, close shows exit + PnL)
+  - Bot activity console with real-time status updates and logs
+  - Prompt viewing capability - see system and user prompts sent to Claude
+  - State preservation across AJAX updates (expanded sections stay open)
+  - Simplified navigation - removed long decision history list, use prev/next buttons only
+  - Fixed prev/next button logic (Previous = older, Next = newer)
+
+- 🟢 **Hold Decision Improvements** (run_analysis_bot.py, web/database.py):
+  - Populate hold decisions with actual position size and leverage (not zeros)
+  - Smart JOIN query links hold/close decisions to their associated positions
+  - Show entry price for hold decisions alongside size and leverage
+
+- 🟢 **Data & Execution Improvements**:
+  - Save system_prompt and user_prompt with each decision for analysis (web/database.py)
+  - Link positions to decisions via decision_id for full traceability (trading/account.py)
+  - Enhanced wait loop error handling to prevent bot freezes (run_analysis_bot.py)
+  - Added trade history (last 10 closed positions) to prompt context
+  - Added recent decisions (last 5) to prompt context for continuity
+
+- 🟢 **Database Schema Updates** (web/database.py):
+  - Added decision_id column to positions table (links positions to creating decision)
+  - Added system_prompt and user_prompt columns to decisions table
+  - Improved get_recent_decisions() with conditional JOIN logic for hold/close signals
+  - Migration logic handles existing databases gracefully
+
+- 🟣 **Bug Fixes**:
+  - Fixed timestamp parsing (added 'Z' suffix for UTC) - "Just now" issue resolved
+  - Fixed decision numbering display (removed duplicate list prefixes)
+  - Fixed bot freeze during wait loop (added try-except error handling)
+  - Fixed start_time parameter bugs (bot was always showing 0 minutes since start)
+  - Fixed console output visibility (added flush=True throughout)
+
+- 🟢 **Developer Experience**:
+  - Added start_bot.bat for Windows one-click startup
+  - Added .claude/settings.local.json to .gitignore
+  - Comprehensive git workflow with proper commit messages
+
+**Files Created**:
+- start_bot.bat - Windows convenience wrapper for bot startup
+
+**Files Modified**:
+- llm/prompts.py - Conviction system, enhanced position display (+159 lines)
+- run_analysis_bot.py - Hold decision population, prompt saving, error handling (+72 lines)
+- web/database.py - Schema migrations, smart JOINs (+86 lines)
+- web/templates/dashboard.html - Realized/unrealized PnL, entry/exit prices, activity console, navigation fixes (+254 lines)
+- web/static/style.css - Activity console styling, metric displays (+106 lines)
+- trading/account.py - decision_id linking (+49 lines)
+- trading/logger.py - Prompt storage (+16 lines)
+- .gitignore - Ignore local settings
+
+**Testing**:
+- ✅ Bot running continuously for multiple cycles without freezing
+- ✅ Dashboard updates show realized vs unrealized PnL correctly
+- ✅ Hold decisions display actual position details (size, leverage, entry price)
+- ✅ Prev/Next navigation works correctly (Previous = older, Next = newer)
+- ✅ Prompts saved to database and viewable via dashboard
+- ✅ Bot activity console shows real-time logs
+- ✅ State preservation works across AJAX updates
+
+**Conviction System Results**:
+- Bot now trusts exit plans instead of closing prematurely
+- Position display reminds Claude of original plan with distance calculations
+- Example: "Profit Target: $111,000 (+1.2% away)" vs just "$111,000"
+- Trade history prevents treating each decision as first trade
+- Confidence-based holding: 70%+ confidence = hold tight to plan
+
+**Dashboard Improvements**:
+- Header: Balance | Realized PnL | Unrealized PnL | Decisions | Last Update
+- Decision cards show: Confidence, Size, Leverage, Entry/Exit, Target, Stop
+- Bot Activity section shows: System prompt (one-time view) + Activity log
+- Navigation: Previous (←) shows older decisions, Next (→) shows newer decisions
+- All sections use AJAX updates with state preservation (no hard refresh closing views)
+
+**Notes**:
+- Conviction system based on user preference: "trust your plan" approach
+- Dashboard now provides complete visibility into bot decision-making
+- All prompts logged for post-trade analysis and debugging
+- Position tracking fully linked to decisions for accountability
+- Bot runs stably with enhanced error handling
+- Paper trading account tracking works correctly
+
+**Git Commits** (this session):
+1. feat(trading): enhance conviction system and dashboard monitoring (0f2f2c0)
+2. fix(parser): allow leverage=0 for hold and close signals (7bb5e4e)
+3. feat(bot): add detailed market data summary to console output (c0fcf2e)
+4. feat(startup): add console output visibility for Windows bot (dd191f9)
+5. feat(startup): add Windows batch script for easy bot startup (9fefeb3)
+6. chore(git): ignore Claude Code local settings file (4d92ae2)
+7. chore(git): untrack Claude Code local settings file (8840ec8)
+8. feat(dashboard): simplify navigation and fix prev/next button logic (dd32ff5)
+
+**Recommended Next Steps**:
+1. Monitor bot performance with new conviction system (observe holding patterns)
+2. Analyze prompt logs to understand Claude's decision-making evolution
+3. Review realized vs unrealized PnL trends in dashboard
+4. Consider adjusting confidence thresholds based on observed behavior
+5. Continue Phase 3: Paper trading validation before live trading
+
+---
+
+**Next Entry**: Phase 3 - Paper Trading Results & Analysis →
