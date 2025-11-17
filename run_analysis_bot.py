@@ -342,11 +342,24 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
         coins_to_analyze = [assets[0]]  # Always analyze primary asset (BTC)
 
         # Add any coins with open positions (e.g., if ETH position exists)
+        # Also sync existing positions to Motherhaven on each cycle
         for pos in account_summary.get('positions', []):
             pos_coin = pos['coin']
             if pos_coin not in coins_to_analyze:
                 coins_to_analyze.append(pos_coin)
                 print(f"[INFO] Found open {pos_coin} position - will fetch market data", flush=True)
+
+            # Sync this open position to Motherhaven (in case it wasn't logged before)
+            if is_live:
+                position_id = f"{pos_coin.split('/')[0]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                logger.log_position_entry(
+                    position_id=position_id,
+                    coin=pos_coin,
+                    side=pos.get('side', 'long'),
+                    entry_price=pos.get('entry_price', 0.0),
+                    quantity_usd=pos.get('quantity_usd', 0.0),
+                    leverage=pos.get('leverage', 1.0)
+                )
 
         print(f"\n[1/4] Analyzing assets: {', '.join(coins_to_analyze)}", flush=True)
 
@@ -522,22 +535,24 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
             is_live=is_live
         )
 
-        # Save updated account state to database (for dashboard)
+        # Save updated account state to database (for dashboard) and Motherhaven
         if not is_live:
             # Paper mode: use TradingAccount's save_state
             account.save_state(current_prices)
         else:
-            # Live mode: save real Hyperliquid state to database
-            save_account_state(
-                balance_usd=account_summary['balance'],
-                equity_usd=account_summary['equity'],
+            # Live mode: save real Hyperliquid state to database AND Motherhaven
+            logger.log_account_state(
+                balance=account_summary['balance'],
+                equity=account_summary['equity'],
                 unrealized_pnl=account_summary['unrealized_pnl'],
                 realized_pnl=account_summary['realized_pnl'],
                 sharpe_ratio=None,
                 num_positions=account_summary['num_positions']
             )
 
-        logger.log_bot_status('running', f'Executed {decision.signal.value} for {decision_coin}')
+        # Get total closed positions count for bot status
+        total_trades = len(get_closed_positions(limit=10000))  # Get all closed positions
+        logger.log_bot_status('running', f'Executed {decision.signal.value} for {decision_coin}', trades_today=total_trades)
 
         # Display decision
         print("\n" + "-"*70, flush=True)

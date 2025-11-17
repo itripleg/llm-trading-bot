@@ -105,7 +105,7 @@ export function AccountOverview() {
               Sharpe Ratio
             </p>
             <p className="text-2xl font-bold">
-              {account.sharpe_ratio !== null ? account.sharpe_ratio.toFixed(2) : "N/A"}
+              {account.sharpe_ratio != null ? account.sharpe_ratio.toFixed(2) : "N/A"}
             </p>
             <p className="text-xs text-muted-foreground">
               {account.num_positions} position{account.num_positions !== 1 ? "s" : ""}
