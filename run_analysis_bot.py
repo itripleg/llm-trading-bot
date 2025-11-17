@@ -103,12 +103,17 @@ def get_current_account_state(
 
             # Get positions from Hyperliquid
             positions_list = []
+            total_unrealized_pnl = 0.0
+
             for asset_pos in hl_state.get('positions', []):
                 pos = asset_pos.get('position', {})
                 coin = pos.get('coin', '')
                 size = float(pos.get('szi', 0))
 
                 if abs(size) > 0:  # Has open position
+                    unrealized_pnl = float(pos.get('unrealizedPnl', 0))
+                    total_unrealized_pnl += unrealized_pnl
+
                     # NOTE: Hyperliquid doesn't provide entry_time, so we use a placeholder
                     # For accurate tracking, positions should be logged to DB when opened
                     positions_list.append({
@@ -118,16 +123,19 @@ def get_current_account_state(
                         'current_price': float(pos.get('entryPx', 0)),  # TODO: Get live price
                         'quantity_usd': float(pos.get('marginUsed', 0)),
                         'leverage': pos.get('leverage', {}).get('value', 1),
-                        'unrealized_pnl': float(pos.get('unrealizedPnl', 0)),
+                        'unrealized_pnl': unrealized_pnl,
                         'entry_time': None  # Hyperliquid doesn't track this - use DB instead
                     })
 
+            # Calculate equity: account_value already includes unrealized PnL from Hyperliquid
+            account_value = float(hl_state.get('account_value', 0))
+
             return {
-                'balance': hl_state.get('account_value', 0),
-                'equity': hl_state.get('account_value', 0),
-                'unrealized_pnl': hl_state.get('total_ntl_pos', 0),
+                'balance': account_value,
+                'equity': account_value,  # account_value = withdrawable = balance + unrealized PnL
+                'unrealized_pnl': total_unrealized_pnl,  # Sum of all position PnLs
                 'realized_pnl': 0,  # Hyperliquid doesn't track this separately
-                'total_pnl': hl_state.get('total_ntl_pos', 0),
+                'total_pnl': total_unrealized_pnl,  # Only unrealized for now
                 'num_positions': len(positions_list),
                 'positions': positions_list
             }
@@ -382,7 +390,17 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
         print(f"\n[ACCOUNT] {'LIVE' if is_live else 'PAPER'} - " +
               f"Balance: ${account_summary['balance']:.2f}, " +
               f"Equity: ${account_summary['equity']:.2f}, " +
+              f"Unrealized PnL: ${account_summary['unrealized_pnl']:+.2f}, " +
               f"Positions: {account_summary['num_positions']}", flush=True)
+
+        # Display open positions details
+        if account_summary['num_positions'] > 0:
+            print(f"\n  Open Positions:", flush=True)
+            for pos in account_summary['positions']:
+                print(f"    {pos['coin']} {pos['side'].upper()}: " +
+                      f"${pos['quantity_usd']:.2f} @ {pos['leverage']}x leverage, " +
+                      f"Entry: ${pos['entry_price']:,.2f}, " +
+                      f"PnL: ${pos['unrealized_pnl']:+.2f}", flush=True)
 
         # Pre-flight check: Skip analysis if balance is too low to trade
         min_practical_balance = 20.0  # Minimum for Hyperliquid position sizes
