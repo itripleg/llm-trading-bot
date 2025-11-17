@@ -29,12 +29,19 @@ from web.database import (
     get_closed_positions,
     get_all_positions,
     get_latest_bot_status,
-    get_bot_status_history
+    get_bot_status_history,
+    set_database_path
 )
+from config.settings import settings
 
 # Initialize Flask app
 app = Flask(__name__)
 CORS(app)  # Enable CORS for potential API usage
+
+# Set database path based on trading mode
+db_mode = "live" if settings.is_live_trading() else "paper"
+set_database_path(db_mode)
+print(f"[DASHBOARD] Using database: trading_bot_{db_mode}.db")
 
 # Initialize database on startup
 init_database()
