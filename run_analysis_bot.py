@@ -27,7 +27,7 @@ from trading.logger import TradingLogger
 from trading.account import TradingAccount
 from trading.risk import RiskManager
 from config.settings import settings
-from web.database import get_closed_positions, get_recent_decisions, init_database
+from web.database import get_closed_positions, get_recent_decisions, init_database, update_decision_execution_status
 
 # Control file for start/stop
 CONTROL_FILE = Path(__file__).parent / "data" / "bot_control.txt"
@@ -233,10 +233,19 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime):
             print(f"\n[RISK CHECK] ❌ TRADE REJECTED", flush=True)
             print(f"  Reason: {rejection_reason}", flush=True)
             print(f"  Decision: {decision.signal.value.upper()} {coin} ${decision.quantity_usd:.2f} @ {decision.leverage}x", flush=True)
+
+            # Update decision status in database
+            update_decision_execution_status(decision_id, 'rejected', rejection_reason)
+            print(f"  [OK] Rejection logged to database", flush=True)
+
             return True  # Continue bot loop (don't crash on rejection)
 
         # Trade passed risk validation
         print(f"[RISK CHECK] ✅ Trade validated", flush=True)
+
+        # Update decision status in database
+        update_decision_execution_status(decision_id, 'executed')
+        print(f"  [OK] Decision marked as executed in database", flush=True)
 
         # Execute decision (paper trading)
         print(f"\n[EXECUTION] Executing decision: {decision.signal.value.upper()}", flush=True)

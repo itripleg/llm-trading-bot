@@ -117,6 +117,14 @@ def init_database():
             cursor.execute("ALTER TABLE decisions ADD COLUMN user_prompt TEXT")
             print("[DB Migration] Added prompt columns to decisions table")
 
+        # Migrate decisions table to add execution tracking
+        try:
+            cursor.execute("SELECT execution_status FROM decisions LIMIT 1")
+        except sqlite3.OperationalError:
+            cursor.execute("ALTER TABLE decisions ADD COLUMN execution_status TEXT DEFAULT 'pending'")
+            cursor.execute("ALTER TABLE decisions ADD COLUMN rejection_reason TEXT")
+            print("[DB Migration] Added execution tracking columns to decisions table")
+
         # Bot status table - activity logs
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS bot_status (
@@ -154,7 +162,9 @@ def save_decision(
     decision_data: Dict[str, Any],
     raw_response: Optional[str] = None,
     system_prompt: Optional[str] = None,
-    user_prompt: Optional[str] = None
+    user_prompt: Optional[str] = None,
+    execution_status: str = 'pending',
+    rejection_reason: Optional[str] = None
 ) -> int:
     """
     Save a Claude trading decision to the database.
@@ -164,6 +174,8 @@ def save_decision(
         raw_response: Optional raw JSON response from Claude
         system_prompt: Optional system prompt sent to Claude
         user_prompt: Optional user prompt sent to Claude
+        execution_status: Status of execution ('pending', 'executed', 'rejected')
+        rejection_reason: Reason for rejection if status is 'rejected'
 
     Returns:
         The ID of the inserted decision
@@ -178,8 +190,8 @@ def save_decision(
             INSERT INTO decisions (
                 timestamp, coin, signal, quantity_usd, leverage, confidence,
                 profit_target, stop_loss, invalidation_condition, justification, raw_response,
-                system_prompt, user_prompt
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                system_prompt, user_prompt, execution_status, rejection_reason
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             timestamp,
             decision_data['coin'],
@@ -193,10 +205,40 @@ def save_decision(
             decision_data['justification'],
             raw_response,
             system_prompt,
-            user_prompt
+            user_prompt,
+            execution_status,
+            rejection_reason
         ))
 
         return cursor.lastrowid
+
+
+def update_decision_execution_status(
+    decision_id: int,
+    execution_status: str,
+    rejection_reason: Optional[str] = None
+) -> bool:
+    """
+    Update the execution status of a decision after risk validation.
+
+    Args:
+        decision_id: ID of the decision to update
+        execution_status: New status ('executed', 'rejected', 'pending')
+        rejection_reason: Reason for rejection if status is 'rejected'
+
+    Returns:
+        True if update successful, False otherwise
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE decisions
+            SET execution_status = ?, rejection_reason = ?
+            WHERE id = ?
+        """, (execution_status, rejection_reason, decision_id))
+
+        return cursor.rowcount > 0
 
 
 def get_recent_decisions(limit: int = 20) -> List[Dict[str, Any]]:
