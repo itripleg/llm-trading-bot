@@ -7,7 +7,9 @@ Use this to reset the database and start fresh.
 
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent))
+
+# Add project root to Python path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from web.database import get_db_connection, init_database
 
