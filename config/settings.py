@@ -33,13 +33,14 @@ class Settings(BaseSettings):
     """
 
     # ===== EXCHANGE API CONFIGURATION =====
-    hyperliquid_api_key: str = Field(
+    # Hyperliquid uses wallet-based authentication
+    hyperliquid_wallet_private_key: str = Field(
         default="",
-        description="Hyperliquid API key"
+        description="Hyperliquid wallet private key (0x...)"
     )
-    hyperliquid_secret: str = Field(
+    hyperliquid_account_address: str = Field(
         default="",
-        description="Hyperliquid API secret"
+        description="Hyperliquid account address (for API wallets, use main account address)"
     )
 
     # ===== LLM API CONFIGURATION =====

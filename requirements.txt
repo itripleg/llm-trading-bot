@@ -1,6 +1,8 @@
 # Exchange & Market Data
 ccxt>=4.0.0
 requests>=2.31.0
+hyperliquid-python-sdk  # For live trading on Hyperliquid
+eth-account  # Required for Hyperliquid wallet authentication
 
 # Data Processing
 pandas>=2.0.0
