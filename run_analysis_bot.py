@@ -344,24 +344,11 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
         coins_to_analyze = [assets[0]]  # Always analyze primary asset (BTC)
 
         # Add any coins with open positions (e.g., if ETH position exists)
-        # Also sync existing positions to Motherhaven on each cycle
         for pos in account_summary.get('positions', []):
             pos_coin = pos['coin']
             if pos_coin not in coins_to_analyze:
                 coins_to_analyze.append(pos_coin)
                 print(f"[INFO] Found open {pos_coin} position - will fetch market data", flush=True)
-
-            # Sync this open position to Motherhaven (in case it wasn't logged before)
-            if is_live:
-                position_id = f"{pos_coin.split('/')[0]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                logger.log_position_entry(
-                    position_id=position_id,
-                    coin=pos_coin,
-                    side=pos.get('side', 'long'),
-                    entry_price=pos.get('entry_price', 0.0),
-                    quantity_usd=pos.get('quantity_usd', 0.0),
-                    leverage=pos.get('leverage', 1.0)
-                )
 
         print(f"\n[1/4] Analyzing assets: {', '.join(coins_to_analyze)}", flush=True)
 
