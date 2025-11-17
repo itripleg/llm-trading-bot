@@ -240,6 +240,8 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime):
 
         # Execute decision (paper trading)
         print(f"\n[EXECUTION] Executing decision: {decision.signal.value.upper()}", flush=True)
+        balance_before = account.balance
+        print(f"  Balance before execution: ${balance_before:.2f}", flush=True)
 
         if decision.signal.value == 'buy_to_enter':
             # Open long position
@@ -252,6 +254,8 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime):
                     leverage=decision.leverage,
                     decision_id=decision_id
                 )
+                print(f"  Balance after opening position: ${account.balance:.2f}", flush=True)
+                print(f"  Change: ${account.balance - balance_before:+.2f} (margin locked)", flush=True)
             else:
                 print(f"  [REJECTED] Insufficient balance", flush=True)
                 print(f"    Required: ${decision.quantity_usd:.2f}", flush=True)
@@ -268,6 +272,8 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime):
                     leverage=decision.leverage,
                     decision_id=decision_id
                 )
+                print(f"  Balance after opening position: ${account.balance:.2f}", flush=True)
+                print(f"  Change: ${account.balance - balance_before:+.2f} (margin locked)", flush=True)
             else:
                 print(f"  [REJECTED] Insufficient balance", flush=True)
                 print(f"    Required: ${decision.quantity_usd:.2f}", flush=True)
@@ -277,6 +283,8 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime):
             # Close existing position
             if coin in account.positions:
                 account.close_position(coin, exit_price=current_price)
+                print(f"  Balance after closing position: ${account.balance:.2f}", flush=True)
+                print(f"  Change: ${account.balance - balance_before:+.2f} (margin returned + P&L)", flush=True)
             else:
                 print(f"  [INFO] No position to close for {coin}", flush=True)
 
@@ -288,7 +296,12 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime):
                 print(f"    Current position unrealized PnL: ${unrealized_pnl:+.2f}", flush=True)
 
         # Save updated account state
+        print(f"\n[DATABASE] Saving account state...", flush=True)
+        print(f"  Balance to save: ${account.balance:.2f}", flush=True)
+        print(f"  Realized P&L: ${account.realized_pnl:+.2f}", flush=True)
+        print(f"  Open positions: {len(account.positions)}", flush=True)
         account.save_state(current_prices)
+        print(f"  [OK] Account state saved to database", flush=True)
         logger.log_bot_status('running', f'Executed {decision.signal.value} for {coin}')
 
         # Display decision
@@ -337,21 +350,29 @@ def run_bot():
     # Initialize database (must happen before TradingAccount creation)
     print("\nInitializing database...", flush=True)
     init_database()
-    print("[OK] Database initialized", flush=True)
+    print("[OK] Database initialized at data/trading_bot.db", flush=True)
 
     # Initialize trading account (loads from DB or starts with $1000)
     print("\nInitializing trading account...", flush=True)
+    print("  Attempting to load previous state from database...", flush=True)
     account = TradingAccount(initial_balance=1000.0)
 
     # Display account summary
     summary = account.get_summary({})
-    print(f"[OK] Account loaded:", flush=True)
-    print(f"  Balance: ${account.balance:.2f}", flush=True)
-    print(f"  Realized P&L: ${account.realized_pnl:+.2f}", flush=True)
-    print(f"  Open Positions: {len(account.positions)}", flush=True)
+    print(f"\n[OK] Account ready:", flush=True)
+    print(f"  💰 Balance: ${account.balance:.2f}", flush=True)
+    print(f"  📊 Realized P&L: ${account.realized_pnl:+.2f}", flush=True)
+    print(f"  📍 Open Positions: {len(account.positions)}", flush=True)
     if account.positions:
         for coin, pos in account.positions.items():
-            print(f"    - {coin}: {pos.side} ${pos.quantity_usd:.2f} @ {pos.leverage}x (entry: ${pos.entry_price:.2f})", flush=True)
+            print(f"    - {coin}: {pos.side} ${pos.quantity_usd:.2f} @ {pos.leverage}x", flush=True)
+            print(f"      Entry: ${pos.entry_price:.2f} | Margin locked: ${pos.quantity_usd:.2f}", flush=True)
+    else:
+        print(f"    (No open positions - ready to trade)", flush=True)
+
+    # Show what will happen with balance
+    print(f"\n  ℹ️  Note: When position opens, margin is deducted from balance", flush=True)
+    print(f"     When position closes, margin + P&L is returned to balance", flush=True)
     print("="*70, flush=True)
 
     # Set up signal handler
