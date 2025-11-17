@@ -15,6 +15,7 @@ import time
 import signal
 from pathlib import Path
 from datetime import datetime, timedelta
+from typing import Dict, Any
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -27,7 +28,7 @@ from trading.logger import TradingLogger
 from trading.account import TradingAccount
 from trading.executor import HyperliquidExecutor  # Live trading
 from config.settings import settings
-from web.database import get_closed_positions, get_recent_decisions
+from web.database import get_closed_positions, get_recent_decisions, set_database_path
 
 # Control file for start/stop
 CONTROL_FILE = Path(__file__).parent / "data" / "bot_control.txt"
@@ -56,6 +57,73 @@ def signal_handler(sig, frame):
     print("\n\n[!] Stopping bot...", flush=True)
     write_control_state("stopped")
     sys.exit(0)
+
+
+def get_current_account_state(
+    executor: HyperliquidExecutor = None,
+    account: TradingAccount = None,
+    current_prices: Dict[str, float] = None,
+    is_live: bool = False
+) -> Dict[str, Any]:
+    """
+    Get current account state from either live exchange or paper trading account.
+
+    Args:
+        executor: HyperliquidExecutor for live mode
+        account: TradingAccount for paper mode
+        current_prices: Current market prices (for paper mode unrealized PnL)
+        is_live: True for live mode, False for paper mode
+
+    Returns:
+        Dict with unified account state format
+    """
+    if is_live and executor:
+        # LIVE MODE: Query real account state from Hyperliquid
+        try:
+            hl_state = executor.get_account_state()
+
+            # Get positions from Hyperliquid
+            positions_list = []
+            for asset_pos in hl_state.get('positions', []):
+                pos = asset_pos.get('position', {})
+                coin = pos.get('coin', '')
+                size = float(pos.get('szi', 0))
+
+                if abs(size) > 0:  # Has open position
+                    positions_list.append({
+                        'coin': f"{coin}/USDC:USDC",
+                        'side': 'long' if size > 0 else 'short',
+                        'entry_price': float(pos.get('entryPx', 0)),
+                        'current_price': float(pos.get('entryPx', 0)),  # TODO: Get live price
+                        'quantity_usd': float(pos.get('marginUsed', 0)),
+                        'leverage': pos.get('leverage', {}).get('value', 1),
+                        'unrealized_pnl': float(pos.get('unrealizedPnl', 0))
+                    })
+
+            return {
+                'balance': hl_state.get('account_value', 0),
+                'equity': hl_state.get('account_value', 0),
+                'unrealized_pnl': hl_state.get('total_ntl_pos', 0),
+                'realized_pnl': 0,  # Hyperliquid doesn't track this separately
+                'total_pnl': hl_state.get('total_ntl_pos', 0),
+                'num_positions': len(positions_list),
+                'positions': positions_list
+            }
+        except Exception as e:
+            print(f"[ERROR] Failed to get live account state: {e}", flush=True)
+            # Return empty state on error
+            return {
+                'balance': 0,
+                'equity': 0,
+                'unrealized_pnl': 0,
+                'realized_pnl': 0,
+                'total_pnl': 0,
+                'num_positions': 0,
+                'positions': []
+            }
+    else:
+        # PAPER MODE: Use TradingAccount
+        return account.get_summary(current_prices or {})
 
 
 def execute_trade(
@@ -111,7 +179,7 @@ def execute_trade(
         else:
             # PAPER TRADING
             side = 'long' if is_buy else 'short'
-            if account.can_open_position(decision.quantity_usd):
+            if account.can_open_position(decision.quantity_usd, decision.leverage):
                 account.open_position(
                     coin=coin,
                     side=side,
@@ -122,9 +190,8 @@ def execute_trade(
                 )
                 print(f"  [PAPER] Opened {side} position", flush=True)
             else:
-                print(f"  [REJECTED] Insufficient balance", flush=True)
-                print(f"    Required: ${decision.quantity_usd:.2f}", flush=True)
-                print(f"    Available: ${account.balance:.2f}", flush=True)
+                # Error details already printed by can_open_position()
+                pass
 
     elif signal == 'close':
         if is_live:
@@ -234,11 +301,19 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
 
         print("="*70, flush=True)
 
-        # Get current account state
+        # Get current account state (live or paper)
         current_prices = {coin: current_price}
-        account_summary = account.get_summary(current_prices)
+        is_live = settings.is_live_trading() and executor is not None
 
-        print(f"\n[ACCOUNT] Balance: ${account_summary['balance']:.2f}, " +
+        account_summary = get_current_account_state(
+            executor=executor,
+            account=account,
+            current_prices=current_prices,
+            is_live=is_live
+        )
+
+        print(f"\n[ACCOUNT] {'LIVE' if is_live else 'PAPER'} - " +
+              f"Balance: ${account_summary['balance']:.2f}, " +
               f"Equity: ${account_summary['equity']:.2f}, " +
               f"Positions: {account_summary['num_positions']}", flush=True)
 
@@ -260,9 +335,9 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
         recent_decisions = get_recent_decisions(limit=5)
 
         account_state = {
-            'available_cash': account.balance,
+            'available_cash': account_summary['balance'],
             'total_value': account_summary['equity'],
-            'total_return_pct': account_summary['total_return_pct'],
+            'total_return_pct': account_summary.get('total_return_pct', 0.0),
             'sharpe_ratio': 0.0,  # TODO: Calculate Sharpe ratio
             'positions': account_summary['positions'],
             'trade_history': trade_history,
@@ -320,8 +395,11 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
             is_live=is_live
         )
 
-        # Save updated account state
-        account.save_state(current_prices)
+        # Save updated account state (only relevant for paper mode)
+        if not is_live:
+            account.save_state(current_prices)
+        # Note: Live mode state is tracked by Hyperliquid, not TradingAccount
+
         logger.log_bot_status('running', f'Executed {decision.signal.value} for {coin}')
 
         # Display decision
@@ -374,8 +452,13 @@ def run_bot():
     print("  - Control file:", CONTROL_FILE, flush=True)
     print("\n" + "="*70, flush=True)
 
+    # Set database path based on mode (separate DBs for paper vs live)
+    db_mode = "live" if settings.is_live_trading() else "paper"
+    set_database_path(db_mode)
+    print(f"\nUsing database: trading_bot_{db_mode}.db", flush=True)
+
     # Initialize trading account (loads from DB or starts with $1000)
-    print("\nInitializing trading account...", flush=True)
+    print("Initializing trading account...", flush=True)
     account = TradingAccount(initial_balance=1000.0)
     print(f"Account state: {account}", flush=True)
     print("="*70, flush=True)

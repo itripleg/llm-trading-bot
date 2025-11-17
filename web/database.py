@@ -15,8 +15,24 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 from contextlib import contextmanager
 
-# Database file location
+# Database file location (default)
 DB_PATH = Path(__file__).parent.parent / "data" / "trading_bot.db"
+
+
+def set_database_path(mode: str = "paper"):
+    """
+    Set the database path based on trading mode.
+
+    Args:
+        mode: 'paper' or 'live'
+    """
+    global DB_PATH
+    base_dir = Path(__file__).parent.parent / "data"
+
+    if mode == "live":
+        DB_PATH = base_dir / "trading_bot_live.db"
+    else:
+        DB_PATH = base_dir / "trading_bot_paper.db"
 
 
 @contextmanager

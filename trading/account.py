@@ -2,6 +2,7 @@
 Account state management for paper trading.
 
 Tracks simulated balance, positions, and P&L without real money.
+Includes realistic fee accounting (0.025% taker fee) to match live trading.
 """
 
 from typing import Dict, List, Optional
@@ -10,6 +11,9 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# Hyperliquid fee rates (as of 2024)
+TAKER_FEE_RATE = 0.00025  # 0.025% taker fee on notional value
 
 from web.database import (
     save_account_state,
@@ -157,17 +161,23 @@ class TradingAccount:
                 total_pnl += position.calculate_pnl(current_prices[coin])
         return total_pnl
 
-    def can_open_position(self, quantity_usd: float) -> bool:
+    def can_open_position(self, quantity_usd: float, leverage: float = 1.0) -> bool:
         """
-        Check if there's sufficient balance to open a position.
+        Check if there's sufficient balance to open a position (including fees).
 
         Args:
-            quantity_usd: Position size in USD
+            quantity_usd: Position size in USD (margin amount)
+            leverage: Leverage multiplier (for fee calculation)
 
         Returns:
             True if sufficient balance, False otherwise
         """
-        return self.balance >= quantity_usd
+        # Calculate entry fee
+        notional_value = quantity_usd * leverage
+        entry_fee = notional_value * TAKER_FEE_RATE
+
+        # Need enough for margin + entry fee
+        return self.balance >= (quantity_usd + entry_fee)
 
     def open_position(
         self,
@@ -192,10 +202,16 @@ class TradingAccount:
         Returns:
             Position object if successful, None if insufficient balance
         """
-        # Check if enough balance
-        if not self.can_open_position(quantity_usd):
+        # Check if enough balance (including fees)
+        if not self.can_open_position(quantity_usd, leverage):
+            # Calculate what's actually needed
+            notional_value = quantity_usd * leverage
+            entry_fee = notional_value * TAKER_FEE_RATE
+            total_needed = quantity_usd + entry_fee
+
             print(f"[ERROR] Insufficient balance to open position")
-            print(f"  Required: ${quantity_usd:.2f}, Available: ${self.balance:.2f}")
+            print(f"  Required: ${total_needed:.2f} (${quantity_usd:.2f} margin + ${entry_fee:.2f} fee)")
+            print(f"  Available: ${self.balance:.2f}")
             return None
 
         # Check if position already exists for this coin
@@ -203,6 +219,10 @@ class TradingAccount:
             print(f"[WARNING] Position already exists for {coin}, closing old one first")
             # In a real system, we'd close the old position
             # For now, just replace it
+
+        # Calculate entry fee (0.025% of notional value)
+        notional_value = quantity_usd * leverage
+        entry_fee = notional_value * TAKER_FEE_RATE
 
         # Create position
         position_id = f"{coin.split('/')[0]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -216,8 +236,8 @@ class TradingAccount:
             entry_time=datetime.now()
         )
 
-        # Deduct margin from balance
-        self.balance -= quantity_usd
+        # Deduct margin + entry fee from balance
+        self.balance -= (quantity_usd + entry_fee)
         self.positions[coin] = position
 
         # Log to database
@@ -232,6 +252,7 @@ class TradingAccount:
         )
 
         print(f"[OK] Opened {side} position: {position}")
+        print(f"  Entry fee: ${entry_fee:.2f} (0.025% of ${notional_value:.2f})")
         print(f"  New balance: ${self.balance:.2f}")
 
         return position
@@ -256,26 +277,35 @@ class TradingAccount:
         # Calculate realized P&L
         pnl = position.calculate_pnl(exit_price)
 
-        # Return margin plus P&L to balance
-        self.balance += position.get_margin() + pnl
-        self.realized_pnl += pnl
+        # Calculate exit fee (0.025% of notional value)
+        notional_value = position.quantity_usd * position.leverage
+        exit_fee = notional_value * TAKER_FEE_RATE
 
-        # Log to database
+        # Return margin plus P&L minus exit fee to balance
+        self.balance += position.get_margin() + pnl - exit_fee
+
+        # Track realized PnL (after fees)
+        pnl_after_fees = pnl - exit_fee
+        self.realized_pnl += pnl_after_fees
+
+        # Log to database (after-fee PnL)
         db_close_position(
             position_id=position.position_id,
             exit_price=exit_price,
-            realized_pnl=pnl
+            realized_pnl=pnl_after_fees
         )
 
         print(f"[OK] Closed {position.side} position: {position}")
         print(f"  Exit price: ${exit_price:.2f}")
-        print(f"  Realized P&L: ${pnl:+.2f}")
+        print(f"  Gross P&L: ${pnl:+.2f}")
+        print(f"  Exit fee: ${exit_fee:.2f} (0.025% of ${notional_value:.2f})")
+        print(f"  Net P&L: ${pnl_after_fees:+.2f}")
         print(f"  New balance: ${self.balance:.2f}")
 
         # Remove from active positions
         del self.positions[coin]
 
-        return pnl
+        return pnl_after_fees
 
     def save_state(self, current_prices: Dict[str, float]):
         """
