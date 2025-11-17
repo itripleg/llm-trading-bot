@@ -127,12 +127,15 @@ def get_current_account_state(
                         'entry_time': None  # Hyperliquid doesn't track this - use DB instead
                     })
 
-            # Calculate equity: account_value already includes unrealized PnL from Hyperliquid
+            # Calculate balance and equity
+            # account_value from Hyperliquid = withdrawable amount = balance + unrealized PnL
             account_value = float(hl_state.get('account_value', 0))
+            balance = account_value - total_unrealized_pnl  # Actual balance without PnL
+            equity = account_value  # Total account value including unrealized PnL
 
             return {
-                'balance': account_value,
-                'equity': account_value,  # account_value = withdrawable = balance + unrealized PnL
+                'balance': balance,
+                'equity': equity,
                 'unrealized_pnl': total_unrealized_pnl,  # Sum of all position PnLs
                 'realized_pnl': 0,  # Hyperliquid doesn't track this separately
                 'total_pnl': total_unrealized_pnl,  # Only unrealized for now
@@ -497,11 +500,21 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
             return False
 
         # For hold decisions, populate with current position details if available
-        if decision.signal.value == 'hold' and decision_coin in account.positions:
-            position = account.positions[decision_coin]
-            decision.quantity_usd = position.quantity_usd
-            decision.leverage = position.leverage
-            print(f"  [HOLD] Populated with current position: ${position.quantity_usd:.2f} @ {position.leverage}x", flush=True)
+        if decision.signal.value == 'hold':
+            # In live mode, get position from account_summary; in paper mode, from account object
+            if is_live and account_summary['positions']:
+                # Find the matching position from live Hyperliquid data
+                live_position = next((p for p in account_summary['positions'] if p['coin'] == decision_coin), None)
+                if live_position:
+                    decision.quantity_usd = live_position['quantity_usd']
+                    decision.leverage = live_position['leverage']
+                    print(f"  [HOLD] Populated with current position: ${live_position['quantity_usd']:.2f} @ {live_position['leverage']}x", flush=True)
+            elif not is_live and decision_coin in account.positions:
+                # Paper trading mode
+                position = account.positions[decision_coin]
+                decision.quantity_usd = position.quantity_usd
+                decision.leverage = position.leverage
+                print(f"  [HOLD] Populated with current position: ${position.quantity_usd:.2f} @ {position.leverage}x", flush=True)
 
         # Log decision to database (save both the response AND the prompts sent to Claude)
         decision_id = logger.log_decision_from_trade_decision(
@@ -539,9 +552,8 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
                 num_positions=account_summary['num_positions']
             )
 
-        # Get total closed positions count for bot status
-        total_trades = len(get_closed_positions(limit=10000))  # Get all closed positions
-        logger.log_bot_status('running', f'Executed {decision.signal.value} for {decision_coin}', trades_today=total_trades)
+        # Log bot status (without trades_today for now - will add to logger later)
+        logger.log_bot_status('running', f'Executed {decision.signal.value} for {decision_coin}')
 
         # Display decision
         print("\n" + "-"*70, flush=True)

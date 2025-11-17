@@ -110,7 +110,7 @@ class MotherhavenLogger:
         exit_plan = decision_data.get('exit_plan', {}) or {}
 
         payload = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now().isoformat(),
             "coin": decision_data['coin'],
             "signal": decision_data['signal'],
             "quantity_usd": float(decision_data['quantity_usd']),
@@ -162,7 +162,7 @@ class MotherhavenLogger:
             "quantity_usd": float(quantity_usd),
             "leverage": float(leverage),
             "entry_price": float(entry_price),
-            "entry_time": datetime.utcnow().isoformat(),
+            "entry_time": datetime.now().isoformat(),
             "status": "open"
         }
 
@@ -205,7 +205,7 @@ class MotherhavenLogger:
             "entry_price": float(entry_price),
             "entry_time": entry_time,
             "exit_price": float(exit_price),
-            "exit_time": datetime.utcnow().isoformat(),
+            "exit_time": datetime.now().isoformat(),
             "realized_pnl": float(realized_pnl),
             "status": "closed"
         }
@@ -236,7 +236,7 @@ class MotherhavenLogger:
             True if successfully posted
         """
         payload = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now().isoformat(),
             "balance_usd": float(balance_usd),
             "equity_usd": float(equity_usd),
             "unrealized_pnl": float(unrealized_pnl),
@@ -271,7 +271,7 @@ class MotherhavenLogger:
             True if successfully posted
         """
         payload = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now().isoformat(),
             "status": status,
             "message": message or ""
         }
