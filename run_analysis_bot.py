@@ -28,7 +28,7 @@ from trading.logger import TradingLogger
 from trading.account import TradingAccount
 from trading.executor import HyperliquidExecutor  # Live trading
 from config.settings import settings
-from web.database import get_closed_positions, get_recent_decisions, set_database_path
+from web.database import get_closed_positions, get_recent_decisions, set_database_path, save_account_state
 
 # Control file for start/stop
 CONTROL_FILE = Path(__file__).parent / "data" / "bot_control.txt"
@@ -395,10 +395,20 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
             is_live=is_live
         )
 
-        # Save updated account state (only relevant for paper mode)
+        # Save updated account state to database (for dashboard)
         if not is_live:
+            # Paper mode: use TradingAccount's save_state
             account.save_state(current_prices)
-        # Note: Live mode state is tracked by Hyperliquid, not TradingAccount
+        else:
+            # Live mode: save real Hyperliquid state to database
+            save_account_state(
+                balance_usd=account_summary['balance'],
+                equity_usd=account_summary['equity'],
+                unrealized_pnl=account_summary['unrealized_pnl'],
+                realized_pnl=account_summary['realized_pnl'],
+                sharpe_ratio=None,
+                num_positions=account_summary['num_positions']
+            )
 
         logger.log_bot_status('running', f'Executed {decision.signal.value} for {coin}')
 
