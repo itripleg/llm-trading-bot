@@ -27,7 +27,7 @@ from trading.logger import TradingLogger
 from trading.account import TradingAccount
 from trading.risk import RiskManager
 from config.settings import settings
-from web.database import get_closed_positions, get_recent_decisions
+from web.database import get_closed_positions, get_recent_decisions, init_database
 
 # Control file for start/stop
 CONTROL_FILE = Path(__file__).parent / "data" / "bot_control.txt"
@@ -334,10 +334,24 @@ def run_bot():
     print("  - Control file:", CONTROL_FILE, flush=True)
     print("\n" + "="*70, flush=True)
 
+    # Initialize database (must happen before TradingAccount creation)
+    print("\nInitializing database...", flush=True)
+    init_database()
+    print("[OK] Database initialized", flush=True)
+
     # Initialize trading account (loads from DB or starts with $1000)
     print("\nInitializing trading account...", flush=True)
     account = TradingAccount(initial_balance=1000.0)
-    print(f"Account state: {account}", flush=True)
+
+    # Display account summary
+    summary = account.get_summary({})
+    print(f"[OK] Account loaded:", flush=True)
+    print(f"  Balance: ${account.balance:.2f}", flush=True)
+    print(f"  Realized P&L: ${account.realized_pnl:+.2f}", flush=True)
+    print(f"  Open Positions: {len(account.positions)}", flush=True)
+    if account.positions:
+        for coin, pos in account.positions.items():
+            print(f"    - {coin}: {pos.side} ${pos.quantity_usd:.2f} @ {pos.leverage}x (entry: ${pos.entry_price:.2f})", flush=True)
     print("="*70, flush=True)
 
     # Set up signal handler
