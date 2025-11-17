@@ -177,14 +177,33 @@ def execute_trade(
                 # Check if order was actually filled
                 filled = False
                 error_msg = None
+                fill_price = None
+                fill_size = None
+
                 for status in result.get("response", {}).get("data", {}).get("statuses", []):
                     if "filled" in status:
                         filled_info = status["filled"]
-                        print(f"  [SUCCESS] Order filled: {filled_info.get('totalSz')} @ ${filled_info.get('avgPx')}", flush=True)
+                        fill_price = float(filled_info.get('avgPx', current_price))
+                        fill_size = float(filled_info.get('totalSz', 0))
+                        print(f"  [SUCCESS] Order filled: {fill_size} @ ${fill_price}", flush=True)
                         filled = True
                     elif "error" in status:
                         error_msg = status["error"]
                         print(f"  [FAILED] Order rejected: {error_msg}", flush=True)
+
+                # Log filled position to database
+                if filled and fill_price:
+                    from datetime import datetime
+                    position_id = f"{coin.split('/')[0]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                    logger.log_position_entry(
+                        position_id=position_id,
+                        coin=coin,
+                        side='long' if is_buy else 'short',
+                        entry_price=fill_price,
+                        quantity_usd=decision.quantity_usd,
+                        leverage=decision.leverage
+                    )
+                    print(f"  [DB] Position logged: {position_id}", flush=True)
 
                 if not filled and not error_msg:
                     print(f"  [UNKNOWN] Order status unclear - check Hyperliquid", flush=True)
