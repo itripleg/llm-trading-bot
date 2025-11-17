@@ -149,21 +149,33 @@ def main():
 
     try:
         if sys.platform == 'win32':
-            # Windows: Start in new console window with visible output
+            # Windows: Start in new console window AND save logs to files
+            bot_log_dir = project_root / "logs"
+            bot_log_dir.mkdir(exist_ok=True)
+            bot_stdout_log = bot_log_dir / "bot_stdout.log"
+            bot_stderr_log = bot_log_dir / "bot_stderr.log"
+
+            bot_stdout = open(bot_stdout_log, 'w')
+            bot_stderr = open(bot_stderr_log, 'w')
+
             # Set environment variable to prevent output buffering
             env = os.environ.copy()
             env['PYTHONUNBUFFERED'] = '1'
 
-            # Start bot WITHOUT redirecting stdout/stderr
-            # This makes output visible in the new console window
+            # Start bot with redirected output to log files
+            # Output will be visible in the new console window AND saved to logs
             bot_process = subprocess.Popen(
                 [python_exe, str(bot_script)],
                 env=env,
+                stdout=bot_stdout,
+                stderr=bot_stderr,
                 creationflags=subprocess.CREATE_NEW_CONSOLE
             )
 
             print(f"[OK] Bot process started (PID: {bot_process.pid})")
             print(f"      Output: Visible in bot console window")
+            print(f"      Logs: {bot_stdout_log}")
+            print(f"            {bot_stderr_log}")
         else:
             # Unix: Start in background with log files
             bot_log_dir = project_root / "logs"

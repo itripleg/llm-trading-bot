@@ -111,6 +111,8 @@ def get_current_account_state(
             }
         except Exception as e:
             print(f"[ERROR] Failed to get live account state: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
             # Return empty state on error
             return {
                 'balance': 0,
@@ -171,8 +173,21 @@ def execute_trade(
                 slippage=0.05  # 5% slippage tolerance
             )
 
-            if result:
-                print(f"  [SUCCESS] Live order executed!", flush=True)
+            if result and result.get("status") == "ok":
+                # Check if order was actually filled
+                filled = False
+                error_msg = None
+                for status in result.get("response", {}).get("data", {}).get("statuses", []):
+                    if "filled" in status:
+                        filled_info = status["filled"]
+                        print(f"  [SUCCESS] Order filled: {filled_info.get('totalSz')} @ ${filled_info.get('avgPx')}", flush=True)
+                        filled = True
+                    elif "error" in status:
+                        error_msg = status["error"]
+                        print(f"  [FAILED] Order rejected: {error_msg}", flush=True)
+
+                if not filled and not error_msg:
+                    print(f"  [UNKNOWN] Order status unclear - check Hyperliquid", flush=True)
             else:
                 print(f"  [FAILED] Live order failed - check logs", flush=True)
 
@@ -316,6 +331,15 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
               f"Balance: ${account_summary['balance']:.2f}, " +
               f"Equity: ${account_summary['equity']:.2f}, " +
               f"Positions: {account_summary['num_positions']}", flush=True)
+
+        # Pre-flight check: Skip analysis if balance is too low to trade
+        min_practical_balance = 20.0  # Minimum for Hyperliquid position sizes
+        if account_summary['balance'] < min_practical_balance and account_summary['num_positions'] == 0:
+            print(f"\n[SKIP] Balance ${account_summary['balance']:.2f} below minimum ${min_practical_balance:.2f}", flush=True)
+            print(f"       Cannot open new positions - skipping Claude analysis to save tokens", flush=True)
+            print(f"       Add more funds or close existing positions to resume trading", flush=True)
+            logger.log_bot_status('paused', f'Insufficient balance: ${account_summary["balance"]:.2f}')
+            return True  # Cycle complete, just can't trade
 
         # Build prompt with real account state
         market_data = {

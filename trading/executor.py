@@ -141,28 +141,54 @@ class HyperliquidExecutor:
             logger.error(f"Error setting leverage for {coin}: {e}")
             return False
 
-    @staticmethod
-    def usd_to_coin_size(usd_amount: float, coin_price: float, leverage: float = 1.0) -> float:
+    def get_size_decimals(self, coin: str) -> int:
         """
-        Convert USD amount to coin size for order placement.
+        Get the size decimals (precision) for a coin from Hyperliquid metadata.
 
         Args:
+            coin: Coin symbol (e.g., "BTC", "ETH")
+
+        Returns:
+            Number of decimal places allowed (default 8 if not found)
+        """
+        try:
+            coin_clean = coin.split("/")[0] if "/" in coin else coin
+            meta = self.info.meta()
+            for asset in meta.get('universe', []):
+                if asset.get('name') == coin_clean:
+                    return asset.get('szDecimals', 8)
+            return 8  # Default if not found
+        except Exception as e:
+            logger.warning(f"Failed to get size decimals for {coin}: {e}")
+            return 8  # Default
+
+    def usd_to_coin_size(self, coin: str, usd_amount: float, coin_price: float, leverage: float = 1.0) -> float:
+        """
+        Convert USD amount to coin size for order placement, properly rounded.
+
+        Args:
+            coin: Coin symbol (e.g., "BTC/USDC:USDC")
             usd_amount: Amount in USD to trade
             coin_price: Current price of the coin
             leverage: Leverage multiplier (position size = usd * leverage)
 
         Returns:
-            Size in coins
+            Size in coins, rounded to correct precision
 
         Example:
-            >>> HyperliquidExecutor.usd_to_coin_size(50, 100000, 2)
+            >>> executor.usd_to_coin_size("BTC", 50, 100000, 2)
             0.001  # $50 with 2x leverage = $100 position / $100k price = 0.001 BTC
         """
         # With leverage: position_size_usd = usd_amount * leverage
         # coin_size = position_size_usd / coin_price
         position_size_usd = usd_amount * leverage
         coin_size = position_size_usd / coin_price
-        return coin_size
+
+        # Round to correct precision for this asset
+        decimals = self.get_size_decimals(coin)
+        coin_size_rounded = round(coin_size, decimals)
+
+        return coin_size_rounded
 
     def market_open_usd(
         self,
@@ -187,8 +213,10 @@ class HyperliquidExecutor:
         Returns:
             Order result dict if successful, None otherwise
         """
-        # Convert USD to coin size
-        size = self.usd_to_coin_size(usd_amount, current_price, leverage)
+        # Convert USD to coin size (with proper rounding)
+        size = self.usd_to_coin_size(coin, usd_amount, current_price, leverage)
+        notional = size * current_price
+        logger.info(f"Position size: {size} {coin.split('/')[0] if '/' in coin else coin} (${notional:.2f} notional)")
 
         # Place order
         return self.market_open(coin, is_buy, size, leverage, slippage)
