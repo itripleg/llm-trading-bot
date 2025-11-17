@@ -104,6 +104,25 @@ class Settings(BaseSettings):
         description="Use Hyperliquid testnet instead of mainnet"
     )
 
+    # ===== MOTHERHAVEN INTEGRATION =====
+    motherhaven_enabled: bool = Field(
+        default=False,
+        description="Enable logging to Motherhaven dashboard"
+    )
+    motherhaven_api_url: str = Field(
+        default="http://localhost:3000",
+        description="Base URL of Motherhaven Next.js API"
+    )
+    motherhaven_api_key: str = Field(
+        default="",
+        description="API key for Motherhaven ingest endpoints (x-api-key header)"
+    )
+    motherhaven_timeout: int = Field(
+        default=10,
+        description="Request timeout for Motherhaven API calls (seconds)",
+        gt=0,
+    )
+
     model_config = ConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -181,6 +200,26 @@ class Settings(BaseSettings):
                 missing_keys.append("HYPERLIQUID_WALLET_PRIVATE_KEY")
 
         return len(missing_keys) == 0, missing_keys
+
+    def validate_motherhaven_config(self) -> tuple[bool, list[str]]:
+        """
+        Validate that Motherhaven integration is properly configured.
+
+        Returns:
+            (is_valid, list_of_issues)
+        """
+        if not self.motherhaven_enabled:
+            return True, []  # Not enabled, so no validation needed
+
+        issues = []
+
+        if not self.motherhaven_api_url:
+            issues.append("MOTHERHAVEN_API_URL must be set when Motherhaven is enabled")
+
+        if not self.motherhaven_api_key:
+            issues.append("MOTHERHAVEN_API_KEY must be set when Motherhaven is enabled")
+
+        return len(issues) == 0, issues
 
 
 # Create singleton instance of settings

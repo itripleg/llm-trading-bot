@@ -4,12 +4,15 @@ Trading logger - convenience functions for logging bot activity to the database.
 This module provides simple helper functions that the trading bot can use
 to log decisions, account state, and positions without directly dealing
 with database operations.
+
+Additionally supports logging to Motherhaven dashboard via API when configured.
 """
 
 import sys
 from pathlib import Path
 from typing import Dict, Any, Optional
 import json
+import logging
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -20,13 +23,21 @@ from web.database import (
     save_position_entry,
     close_position,
     log_bot_status as db_log_bot_status,
-    init_database
+    init_database,
+    get_open_positions as db_get_open_positions
 )
+from web.motherhaven_logger import MotherhavenLogger
+from config.settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 class TradingLogger:
     """
     Convenience class for logging trading bot activity.
+
+    Logs to SQLite database (always) and optionally to Motherhaven dashboard API
+    when configured via MOTHERHAVEN_ENABLED=true in .env
 
     Usage:
         logger = TradingLogger()
@@ -39,13 +50,30 @@ class TradingLogger:
         """Initialize the logger and ensure database is set up."""
         init_database()
 
+        # Initialize Motherhaven logger if enabled
+        self.motherhaven: Optional[MotherhavenLogger] = None
+        if settings.motherhaven_enabled:
+            is_valid, issues = settings.validate_motherhaven_config()
+            if is_valid:
+                self.motherhaven = MotherhavenLogger(
+                    base_url=settings.motherhaven_api_url,
+                    api_key=settings.motherhaven_api_key,
+                    enabled=True,
+                    timeout=settings.motherhaven_timeout
+                )
+                logger.info(f"[Motherhaven] Integration enabled - posting to {settings.motherhaven_api_url}")
+            else:
+                logger.warning(f"[Motherhaven] Integration disabled due to configuration issues: {', '.join(issues)}")
+        else:
+            logger.info("[Motherhaven] Integration disabled - only logging to SQLite")
+
     def log_decision(
         self,
         decision: Dict[str, Any],
         raw_response: Optional[str] = None
     ) -> int:
         """
-        Log a Claude trading decision.
+        Log a Claude trading decision to SQLite and Motherhaven.
 
         Args:
             decision: TradeDecision dictionary from llm/parser.py
@@ -65,7 +93,17 @@ class TradingLogger:
                 'justification': '...'
             })
         """
-        return save_decision(decision, raw_response)
+        # Save to SQLite (always)
+        decision_id = save_decision(decision, raw_response)
+
+        # Send to Motherhaven API (if enabled)
+        if self.motherhaven:
+            try:
+                self.motherhaven.log_decision(decision, raw_response)
+            except Exception as e:
+                logger.warning(f"[Motherhaven] Failed to log decision: {e}")
+
+        return decision_id
 
     def log_account_state(
         self,
@@ -77,7 +115,7 @@ class TradingLogger:
         num_positions: int = 0
     ) -> int:
         """
-        Log current account state snapshot.
+        Log current account state snapshot to SQLite and Motherhaven.
 
         Args:
             balance: Available cash balance in USD
@@ -100,7 +138,8 @@ class TradingLogger:
                 num_positions=1
             )
         """
-        return save_account_state(
+        # Save to SQLite (always)
+        state_id = save_account_state(
             balance_usd=balance,
             equity_usd=equity,
             unrealized_pnl=unrealized_pnl,
@@ -108,6 +147,22 @@ class TradingLogger:
             sharpe_ratio=sharpe_ratio,
             num_positions=num_positions
         )
+
+        # Send to Motherhaven API (if enabled)
+        if self.motherhaven:
+            try:
+                self.motherhaven.log_account_state(
+                    balance_usd=balance,
+                    equity_usd=equity,
+                    unrealized_pnl=unrealized_pnl,
+                    realized_pnl=realized_pnl,
+                    sharpe_ratio=sharpe_ratio,
+                    num_positions=num_positions
+                )
+            except Exception as e:
+                logger.warning(f"[Motherhaven] Failed to log account state: {e}")
+
+        return state_id
 
     def log_position_entry(
         self,
@@ -119,7 +174,7 @@ class TradingLogger:
         leverage: float
     ) -> int:
         """
-        Log a new position entry.
+        Log a new position entry to SQLite and Motherhaven.
 
         Args:
             position_id: Unique identifier for this position
@@ -142,7 +197,8 @@ class TradingLogger:
                 leverage=2.0
             )
         """
-        return save_position_entry(
+        # Save to SQLite (always)
+        pos_id = save_position_entry(
             position_id=position_id,
             coin=coin,
             side=side,
@@ -151,6 +207,22 @@ class TradingLogger:
             leverage=leverage
         )
 
+        # Send to Motherhaven API (if enabled)
+        if self.motherhaven:
+            try:
+                self.motherhaven.log_position_entry(
+                    position_id=position_id,
+                    coin=coin,
+                    side=side,
+                    entry_price=entry_price,
+                    quantity_usd=quantity_usd,
+                    leverage=leverage
+                )
+            except Exception as e:
+                logger.warning(f"[Motherhaven] Failed to log position entry: {e}")
+
+        return pos_id
+
     def log_position_exit(
         self,
         position_id: str,
@@ -158,7 +230,7 @@ class TradingLogger:
         realized_pnl: float
     ) -> bool:
         """
-        Log a position exit/close.
+        Log a position exit/close to SQLite and Motherhaven.
 
         Args:
             position_id: ID of the position being closed
@@ -175,11 +247,43 @@ class TradingLogger:
                 realized_pnl=25.50
             )
         """
-        return close_position(
+        # Get position details before closing (needed for Motherhaven)
+        position_data = None
+        if self.motherhaven:
+            try:
+                open_positions = db_get_open_positions()
+                for pos in open_positions:
+                    if pos['position_id'] == position_id:
+                        position_data = pos
+                        break
+            except Exception as e:
+                logger.warning(f"[Motherhaven] Failed to retrieve position data: {e}")
+
+        # Close position in SQLite (always)
+        success = close_position(
             position_id=position_id,
             exit_price=exit_price,
             realized_pnl=realized_pnl
         )
+
+        # Send to Motherhaven API (if enabled and position was found)
+        if self.motherhaven and success and position_data:
+            try:
+                self.motherhaven.log_position_exit(
+                    position_id=position_id,
+                    coin=position_data['coin'],
+                    side=position_data['side'],
+                    entry_price=position_data['entry_price'],
+                    entry_time=position_data['entry_time'],
+                    exit_price=exit_price,
+                    quantity_usd=position_data['quantity_usd'],
+                    leverage=position_data['leverage'],
+                    realized_pnl=realized_pnl
+                )
+            except Exception as e:
+                logger.warning(f"[Motherhaven] Failed to log position exit: {e}")
+
+        return success
 
     def log_bot_status(
         self,
@@ -188,7 +292,7 @@ class TradingLogger:
         error: Optional[str] = None
     ):
         """
-        Log bot status/activity.
+        Log bot status/activity to SQLite and Motherhaven.
 
         Args:
             status: Bot status ('running', 'paused', 'stopped', 'error')
@@ -199,7 +303,19 @@ class TradingLogger:
             logger.log_bot_status('running', 'Bot started successfully')
             logger.log_bot_status('error', error='API connection failed')
         """
+        # Log to SQLite (always)
         db_log_bot_status(status=status, message=message, error=error)
+
+        # Send to Motherhaven API (if enabled)
+        if self.motherhaven:
+            try:
+                status_message = message or error or ""
+                self.motherhaven.log_status(
+                    status=status,
+                    message=status_message
+                )
+            except Exception as e:
+                logger.warning(f"[Motherhaven] Failed to log bot status: {e}")
 
     def log_decision_from_trade_decision(
         self,
@@ -209,7 +325,7 @@ class TradingLogger:
         user_prompt: Optional[str] = None
     ) -> int:
         """
-        Convenience method to log a TradeDecision Pydantic model directly.
+        Convenience method to log a TradeDecision Pydantic model directly to SQLite and Motherhaven.
 
         Args:
             trade_decision: TradeDecision model instance from llm/parser.py
@@ -241,7 +357,17 @@ class TradingLogger:
             'justification': trade_decision.justification
         }
 
-        return save_decision(decision_dict, raw_response, system_prompt, user_prompt)
+        # Save to SQLite (with prompts)
+        decision_id = save_decision(decision_dict, raw_response, system_prompt, user_prompt)
+
+        # Send to Motherhaven API (if enabled) - uses self.log_decision logic
+        if self.motherhaven:
+            try:
+                self.motherhaven.log_decision(decision_dict, raw_response)
+            except Exception as e:
+                logger.warning(f"[Motherhaven] Failed to log decision: {e}")
+
+        return decision_id
 
 
 # Singleton instance for convenience
