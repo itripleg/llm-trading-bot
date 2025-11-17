@@ -440,7 +440,7 @@ def run_bot():
     print("="*70, flush=True)
 
     if settings.is_live_trading():
-        print("\n⚠️  LIVE TRADING MODE - REAL MONEY AT RISK ⚠️", flush=True)
+        print("\n[!!!] LIVE TRADING MODE - REAL MONEY AT RISK [!!!]", flush=True)
         print(f"Testnet: {settings.hyperliquid_testnet}", flush=True)
     else:
         print("\nThis bot trades with simulated money (paper trading).", flush=True)
