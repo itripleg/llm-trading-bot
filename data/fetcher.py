@@ -32,17 +32,13 @@ class MarketDataFetcher:
         Enables rate limiting to avoid exceeding API limits.
         """
         try:
+            # No authentication needed for public market data
             exchange_config = {
                 "enableRateLimit": True,
                 "options": {
                     "defaultType": "swap",  # Hyperliquid perpetuals (swaps)
                 }
             }
-
-            # Add API credentials if configured
-            if settings.hyperliquid_api_key and settings.hyperliquid_secret:
-                exchange_config["apiKey"] = settings.hyperliquid_api_key
-                exchange_config["secret"] = settings.hyperliquid_secret
 
             self.exchange = ccxt.hyperliquid(exchange_config)
 

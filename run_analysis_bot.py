@@ -25,6 +25,7 @@ from llm.prompts import get_system_prompt, build_user_prompt
 from llm.parser import parse_llm_response
 from trading.logger import TradingLogger
 from trading.account import TradingAccount
+from trading.executor import HyperliquidExecutor  # Live trading
 from config.settings import settings
 from web.database import get_closed_positions, get_recent_decisions
 
@@ -57,18 +58,116 @@ def signal_handler(sig, frame):
     sys.exit(0)
 
 
-def run_analysis_cycle(account: TradingAccount, start_time: datetime):
+def execute_trade(
+    decision,
+    coin: str,
+    current_price: float,
+    decision_id: int,
+    account: TradingAccount = None,
+    executor: HyperliquidExecutor = None,
+    is_live: bool = False
+):
+    """
+    Execute a trading decision in paper or live mode.
+
+    Args:
+        decision: TradeDecision object from Claude
+        coin: Coin symbol (e.g., "BTC/USDC:USDC")
+        current_price: Current market price
+        decision_id: ID of decision being executed
+        account: TradingAccount for paper trading (required if not live)
+        executor: HyperliquidExecutor for live trading (required if live)
+        is_live: True for live trading, False for paper trading
+    """
+    signal = decision.signal.value
+
+    print(f"\n[EXECUTION] {'LIVE' if is_live else 'PAPER'} MODE: {signal.upper()}", flush=True)
+
+    if signal == 'buy_to_enter' or signal == 'sell_to_enter':
+        is_buy = (signal == 'buy_to_enter')
+
+        if is_live:
+            # LIVE TRADING
+            print(f"  [LIVE] Opening {'LONG' if is_buy else 'SHORT'} position", flush=True)
+            print(f"    Coin: {coin}", flush=True)
+            print(f"    Margin: ${decision.quantity_usd:.2f}", flush=True)
+            print(f"    Leverage: {decision.leverage}x", flush=True)
+            print(f"    Price: ${current_price:,.2f}", flush=True)
+
+            result = executor.market_open_usd(
+                coin=coin,
+                is_buy=is_buy,
+                usd_amount=decision.quantity_usd,
+                current_price=current_price,
+                leverage=int(decision.leverage),
+                slippage=0.05  # 5% slippage tolerance
+            )
+
+            if result:
+                print(f"  [SUCCESS] Live order executed!", flush=True)
+            else:
+                print(f"  [FAILED] Live order failed - check logs", flush=True)
+
+        else:
+            # PAPER TRADING
+            side = 'long' if is_buy else 'short'
+            if account.can_open_position(decision.quantity_usd):
+                account.open_position(
+                    coin=coin,
+                    side=side,
+                    entry_price=current_price,
+                    quantity_usd=decision.quantity_usd,
+                    leverage=decision.leverage,
+                    decision_id=decision_id
+                )
+                print(f"  [PAPER] Opened {side} position", flush=True)
+            else:
+                print(f"  [REJECTED] Insufficient balance", flush=True)
+                print(f"    Required: ${decision.quantity_usd:.2f}", flush=True)
+                print(f"    Available: ${account.balance:.2f}", flush=True)
+
+    elif signal == 'close':
+        if is_live:
+            # LIVE TRADING - Close position
+            print(f"  [LIVE] Closing {coin} position", flush=True)
+            result = executor.market_close(coin)
+            if result:
+                print(f"  [SUCCESS] Position closed!", flush=True)
+            else:
+                print(f"  [INFO] No position to close or close failed", flush=True)
+        else:
+            # PAPER TRADING
+            if coin in account.positions:
+                account.close_position(coin, exit_price=current_price)
+                print(f"  [PAPER] Position closed", flush=True)
+            else:
+                print(f"  [INFO] No position to close for {coin}", flush=True)
+
+    elif signal == 'hold':
+        # Just hold - same for both modes
+        print(f"  [HOLD] No action taken", flush=True)
+        if not is_live and coin in account.positions:
+            unrealized_pnl = account.positions[coin].calculate_pnl(current_price)
+            print(f"    Current position unrealized PnL: ${unrealized_pnl:+.2f}", flush=True)
+        elif is_live:
+            position_info = executor.get_position_info(coin)
+            if position_info:
+                print(f"    Current position unrealized PnL: ${position_info['unrealized_pnl']:+.2f}", flush=True)
+
+
+def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: HyperliquidExecutor = None):
     """
     Run one analysis cycle:
     1. Fetch market data for all configured assets
     2. Calculate indicators
     3. Get Claude's decision
-    4. Execute decision (paper trading)
+    4. Execute decision (paper or live trading based on mode)
     5. Log to database
 
     Args:
         account: TradingAccount instance to track balance and positions
         start_time: Bot start time to calculate minutes since start
+        executor: Optional HyperliquidExecutor for live trading
 
     Returns:
         bool: True if successful, False if error
@@ -208,54 +307,18 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime):
             user_prompt=user_prompt
         )
 
-        # Execute decision (paper trading)
-        print(f"\n[EXECUTION] Executing decision: {decision.signal.value.upper()}", flush=True)
+        # Execute decision (paper or live mode)
+        is_live = settings.is_live_trading() and executor is not None
 
-        if decision.signal.value == 'buy_to_enter':
-            # Open long position
-            if account.can_open_position(decision.quantity_usd):
-                account.open_position(
-                    coin=coin,
-                    side='long',
-                    entry_price=current_price,
-                    quantity_usd=decision.quantity_usd,
-                    leverage=decision.leverage,
-                    decision_id=decision_id
-                )
-            else:
-                print(f"  [REJECTED] Insufficient balance", flush=True)
-                print(f"    Required: ${decision.quantity_usd:.2f}", flush=True)
-                print(f"    Available: ${account.balance:.2f}", flush=True)
-
-        elif decision.signal.value == 'sell_to_enter':
-            # Open short position
-            if account.can_open_position(decision.quantity_usd):
-                account.open_position(
-                    coin=coin,
-                    side='short',
-                    entry_price=current_price,
-                    quantity_usd=decision.quantity_usd,
-                    leverage=decision.leverage,
-                    decision_id=decision_id
-                )
-            else:
-                print(f"  [REJECTED] Insufficient balance", flush=True)
-                print(f"    Required: ${decision.quantity_usd:.2f}", flush=True)
-                print(f"    Available: ${account.balance:.2f}", flush=True)
-
-        elif decision.signal.value == 'close':
-            # Close existing position
-            if coin in account.positions:
-                account.close_position(coin, exit_price=current_price)
-            else:
-                print(f"  [INFO] No position to close for {coin}", flush=True)
-
-        elif decision.signal.value == 'hold':
-            # Just hold, update unrealized PnL
-            print(f"  [HOLD] No action taken", flush=True)
-            if coin in account.positions:
-                unrealized_pnl = account.positions[coin].calculate_pnl(current_price)
-                print(f"    Current position unrealized PnL: ${unrealized_pnl:+.2f}", flush=True)
+        execute_trade(
+            decision=decision,
+            coin=coin,
+            current_price=current_price,
+            decision_id=decision_id,
+            account=account if not is_live else None,
+            executor=executor if is_live else None,
+            is_live=is_live
+        )
 
         # Save updated account state
         account.save_state(current_prices)
@@ -294,10 +357,17 @@ def run_bot():
     global RUNNING
 
     print("="*70, flush=True)
-    print("ALPHA ARENA MINI - PAPER TRADING BOT", flush=True)
+    mode = "LIVE TRADING" if settings.is_live_trading() else "PAPER TRADING"
+    print(f"ALPHA ARENA MINI - {mode} BOT", flush=True)
     print("="*70, flush=True)
-    print("\nThis bot trades with simulated money (paper trading).", flush=True)
-    print("Claude makes decisions, bot executes them with fake balance.", flush=True)
+
+    if settings.is_live_trading():
+        print("\n⚠️  LIVE TRADING MODE - REAL MONEY AT RISK ⚠️", flush=True)
+        print(f"Testnet: {settings.hyperliquid_testnet}", flush=True)
+    else:
+        print("\nThis bot trades with simulated money (paper trading).", flush=True)
+        print("Claude makes decisions, bot executes them with fake balance.", flush=True)
+
     print("\nControls:", flush=True)
     print("  - Dashboard: http://localhost:5000", flush=True)
     print("  - Ctrl+C: Stop the bot", flush=True)
@@ -309,6 +379,19 @@ def run_bot():
     account = TradingAccount(initial_balance=1000.0)
     print(f"Account state: {account}", flush=True)
     print("="*70, flush=True)
+
+    # Initialize executor if in live mode
+    executor = None
+    if settings.is_live_trading():
+        print("\nInitializing Hyperliquid executor...", flush=True)
+        try:
+            executor = HyperliquidExecutor(testnet=settings.hyperliquid_testnet)
+            print(f"Executor initialized successfully!", flush=True)
+        except Exception as e:
+            print(f"[ERROR] Failed to initialize executor: {e}", flush=True)
+            print("Make sure HYPERLIQUID_WALLET_PRIVATE_KEY is set in .env", flush=True)
+            return
+        print("="*70, flush=True)
 
     # Set up signal handler
     signal.signal(signal.SIGINT, signal_handler)
@@ -344,7 +427,7 @@ def run_bot():
             print(f"\n{'='*70}", flush=True)
             print(f"CYCLE #{cycle_count}", flush=True)
 
-            success = run_analysis_cycle(account, start_time)
+            success = run_analysis_cycle(account, start_time, executor)
 
             if success:
                 print(f"\n[OK] Cycle #{cycle_count} complete", flush=True)

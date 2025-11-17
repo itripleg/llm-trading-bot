@@ -177,10 +177,8 @@ class Settings(BaseSettings):
             missing_keys.append("ANTHROPIC_API_KEY")
 
         if self.is_live_trading():
-            if not self.hyperliquid_api_key:
-                missing_keys.append("HYPERLIQUID_API_KEY")
-            if not self.hyperliquid_secret:
-                missing_keys.append("HYPERLIQUID_SECRET")
+            if not self.hyperliquid_wallet_private_key:
+                missing_keys.append("HYPERLIQUID_WALLET_PRIVATE_KEY")
 
         return len(missing_keys) == 0, missing_keys
 
