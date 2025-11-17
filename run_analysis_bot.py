@@ -324,62 +324,98 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
         client = ClaudeClient()
         logger = TradingLogger()
 
-        # Get assets from settings
-        assets = [a.strip() for a in settings.trading_assets.split(',')]
-        print(f"\n[1/4] Analyzing assets: {', '.join(assets)}", flush=True)
-
-        # For now, just analyze the first asset (BTC)
-        # TODO: Analyze all assets in future
-        coin = assets[0]
-        print(f"  Focusing on: {coin}", flush=True)
-
-        # Fetch market data
-        print(f"\n[2/4] Fetching market data for {coin}...", flush=True)
-        ohlcv = fetcher.fetch_ohlcv(coin, timeframe='3m', limit=100)
-
-        if ohlcv.empty:
-            print(f"  [FAIL] Could not fetch data for {coin}", flush=True)
-            return False
-
-        current_price = ohlcv['close'].iloc[-1]
-        print(f"  [OK] Current price: ${current_price:,.2f}", flush=True)
-
-        # Calculate indicators
-        print(f"\n[3/4] Calculating indicators...", flush=True)
-        data_with_indicators = TechnicalIndicators.calculate_all(ohlcv)
-
-        latest = data_with_indicators.iloc[-1]
-
-        # Display market data summary
-        print(f"\n" + "="*70, flush=True)
-        print(f"MARKET DATA SUMMARY - {coin}", flush=True)
-        print("="*70, flush=True)
-        print(f"Current Price:    ${current_price:,.2f}", flush=True)
-        print(f"", flush=True)
-        print(f"Technical Indicators (3-minute timeframe):", flush=True)
-        print(f"  EMA-20:         ${latest.get('ema_20', 0):,.2f}", flush=True)
-        print(f"  EMA-50:         ${latest.get('ema_50', 0):,.2f}", flush=True)
-        print(f"  RSI-7:          {latest.get('rsi_7', 0):.2f}", flush=True)
-        print(f"  RSI-14:         {latest.get('rsi_14', 0):.2f}", flush=True)
-        print(f"  MACD:           {latest.get('macd', 0):.2f}", flush=True)
-        print(f"  MACD Signal:    {latest.get('macd_signal', 0):.2f}", flush=True)
-        print(f"  MACD Histogram: {latest.get('macd_hist', 0):.2f}", flush=True)
-
-        # Show price trend
-        if len(data_with_indicators) >= 2:
-            prev_price = data_with_indicators['close'].iloc[-2]
-            price_change = current_price - prev_price
-            price_change_pct = (price_change / prev_price) * 100
-            trend_symbol = "UP" if price_change > 0 else "DOWN" if price_change < 0 else "FLAT"
-            print(f"", flush=True)
-            print(f"Recent Movement:  {trend_symbol} ${price_change:+.2f} ({price_change_pct:+.2f}%)", flush=True)
-
-        print("="*70, flush=True)
-
-        # Get current account state (live or paper)
-        current_prices = {coin: current_price}
+        # Get current account state first to see what positions exist
         is_live = settings.is_live_trading() and executor is not None
 
+        # Get preliminary account state (without prices, just to see positions)
+        account_summary = get_current_account_state(
+            executor=executor,
+            account=account,
+            current_prices={},
+            is_live=is_live
+        )
+
+        # Get assets from settings
+        assets = [a.strip() for a in settings.trading_assets.split(',')]
+
+        # Determine which coins to analyze: primary asset + any with open positions
+        coins_to_analyze = [assets[0]]  # Always analyze primary asset (BTC)
+
+        # Add any coins with open positions (e.g., if ETH position exists)
+        for pos in account_summary.get('positions', []):
+            pos_coin = pos['coin']
+            if pos_coin not in coins_to_analyze:
+                coins_to_analyze.append(pos_coin)
+                print(f"[INFO] Found open {pos_coin} position - will fetch market data", flush=True)
+
+        print(f"\n[1/4] Analyzing assets: {', '.join(coins_to_analyze)}", flush=True)
+
+        # Fetch market data for all relevant coins
+        print(f"\n[2/4] Fetching market data...", flush=True)
+        market_data = {}
+        current_prices = {}
+
+        for coin in coins_to_analyze:
+            print(f"  Fetching {coin}...", flush=True)
+            ohlcv = fetcher.fetch_ohlcv(coin, timeframe='3m', limit=100)
+
+            if ohlcv.empty:
+                print(f"    [WARN] Could not fetch data for {coin}", flush=True)
+                continue
+
+            current_price = ohlcv['close'].iloc[-1]
+            current_prices[coin] = current_price
+            print(f"    [OK] Current price: ${current_price:,.2f}", flush=True)
+
+            # Calculate indicators
+            data_with_indicators = TechnicalIndicators.calculate_all(ohlcv)
+
+            market_data[coin] = {
+                'current_price': current_price,
+                'ohlcv': data_with_indicators,
+                'indicators': data_with_indicators,
+                'funding_rate': 0.0001,
+                'open_interest': None,
+            }
+
+        if not market_data:
+            print(f"  [FAIL] Could not fetch data for any assets", flush=True)
+            return False
+
+        # Display market data summary for primary asset
+        print(f"\n[3/4] Market summary...", flush=True)
+        primary_coin = coins_to_analyze[0]
+        if primary_coin in market_data:
+            latest = market_data[primary_coin]['indicators'].iloc[-1]
+            current_price = market_data[primary_coin]['current_price']
+
+            print(f"\n" + "="*70, flush=True)
+            print(f"MARKET DATA SUMMARY - {primary_coin}", flush=True)
+            print("="*70, flush=True)
+            print(f"Current Price:    ${current_price:,.2f}", flush=True)
+            print(f"", flush=True)
+            print(f"Technical Indicators (3-minute timeframe):", flush=True)
+            print(f"  EMA-20:         ${latest.get('ema_20', 0):,.2f}", flush=True)
+            print(f"  EMA-50:         ${latest.get('ema_50', 0):,.2f}", flush=True)
+            print(f"  RSI-7:          {latest.get('rsi_7', 0):.2f}", flush=True)
+            print(f"  RSI-14:         {latest.get('rsi_14', 0):.2f}", flush=True)
+            print(f"  MACD:           {latest.get('macd', 0):.2f}", flush=True)
+            print(f"  MACD Signal:    {latest.get('macd_signal', 0):.2f}", flush=True)
+            print(f"  MACD Histogram: {latest.get('macd_hist', 0):.2f}", flush=True)
+
+            # Show price trend
+            indicators_df = market_data[primary_coin]['indicators']
+            if len(indicators_df) >= 2:
+                prev_price = indicators_df['close'].iloc[-2]
+                price_change = current_price - prev_price
+                price_change_pct = (price_change / prev_price) * 100
+                trend_symbol = "UP" if price_change > 0 else "DOWN" if price_change < 0 else "FLAT"
+                print(f"", flush=True)
+                print(f"Recent Movement:  {trend_symbol} ${price_change:+.2f} ({price_change_pct:+.2f}%)", flush=True)
+
+            print("="*70, flush=True)
+
+        # Refresh account state with current prices
         account_summary = get_current_account_state(
             executor=executor,
             account=account,
@@ -410,17 +446,6 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
             print(f"       Add more funds or close existing positions to resume trading", flush=True)
             logger.log_bot_status('paused', f'Insufficient balance: ${account_summary["balance"]:.2f}')
             return True  # Cycle complete, just can't trade
-
-        # Build prompt with real account state
-        market_data = {
-            coin: {
-                'current_price': current_price,
-                'ohlcv': data_with_indicators,
-                'indicators': data_with_indicators,
-                'funding_rate': 0.0001,
-                'open_interest': None,
-            }
-        }
 
         # Get trade history for context (last 10 closed positions)
         trade_history = get_closed_positions(limit=10)
@@ -461,9 +486,17 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
             print("  [FAIL] Could not parse response", flush=True)
             return False
 
+        # Get the coin Claude decided on and its current price
+        decision_coin = decision.coin
+        decision_price = current_prices.get(decision_coin)
+
+        if not decision_price:
+            print(f"  [ERROR] No market data for {decision_coin}", flush=True)
+            return False
+
         # For hold decisions, populate with current position details if available
-        if decision.signal.value == 'hold' and coin in account.positions:
-            position = account.positions[coin]
+        if decision.signal.value == 'hold' and decision_coin in account.positions:
+            position = account.positions[decision_coin]
             decision.quantity_usd = position.quantity_usd
             decision.leverage = position.leverage
             print(f"  [HOLD] Populated with current position: ${position.quantity_usd:.2f} @ {position.leverage}x", flush=True)
@@ -481,8 +514,8 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
 
         execute_trade(
             decision=decision,
-            coin=coin,
-            current_price=current_price,
+            coin=decision_coin,
+            current_price=decision_price,
             decision_id=decision_id,
             account=account if not is_live else None,
             executor=executor if is_live else None,
@@ -504,7 +537,7 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
                 num_positions=account_summary['num_positions']
             )
 
-        logger.log_bot_status('running', f'Executed {decision.signal.value} for {coin}')
+        logger.log_bot_status('running', f'Executed {decision.signal.value} for {decision_coin}')
 
         # Display decision
         print("\n" + "-"*70, flush=True)
