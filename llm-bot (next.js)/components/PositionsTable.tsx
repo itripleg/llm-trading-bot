@@ -38,21 +38,21 @@ function PositionRow({ position }: { position: BotPosition }) {
 
       {/* Size & Leverage */}
       <div>
-        <div className="font-mono text-sm">${position.quantity_usd.toFixed(2)}</div>
-        <div className="text-xs text-muted-foreground">{position.leverage}x</div>
+        <div className="font-mono text-sm">${(position.quantity_usd ?? 0).toFixed(2)}</div>
+        <div className="text-xs text-muted-foreground">{position.leverage ?? 1}x</div>
       </div>
 
       {/* Entry Price */}
       <div className="font-mono text-sm">
-        ${position.entry_price.toFixed(2)}
+        ${(position.entry_price ?? 0).toFixed(2)}
       </div>
 
       {/* Current/Exit Price */}
       <div className="font-mono text-sm">
         {isOpen ? (
-          position.current_price ? `$${position.current_price.toFixed(2)}` : "..."
+          position.current_price ? `$${(position.current_price ?? 0).toFixed(2)}` : "..."
         ) : (
-          position.exit_price ? `$${position.exit_price.toFixed(2)}` : "N/A"
+          position.exit_price ? `$${(position.exit_price ?? 0).toFixed(2)}` : "N/A"
         )}
       </div>
 

@@ -42,9 +42,16 @@ export function AccountOverview() {
 
   if (!account) return null;
 
-  const isProfit = account.total_pnl >= 0;
-  const pnlPercentage = account.balance_usd > 0
-    ? ((account.total_pnl / account.balance_usd) * 100).toFixed(2)
+  // Add safety checks for undefined values
+  const balance = account.balance_usd ?? 0;
+  const equity = account.equity_usd ?? 0;
+  const totalPnl = account.total_pnl ?? 0;
+  const unrealizedPnl = account.unrealized_pnl ?? 0;
+  const realizedPnl = account.realized_pnl ?? 0;
+
+  const isProfit = totalPnl >= 0;
+  const pnlPercentage = balance > 0
+    ? ((totalPnl / balance) * 100).toFixed(2)
     : "0.00";
 
   return (
@@ -61,7 +68,7 @@ export function AccountOverview() {
           <div className="space-y-1">
             <p className="text-sm text-muted-foreground">Balance</p>
             <p className="text-2xl font-bold">
-              ${account.balance_usd.toFixed(2)}
+              ${balance.toFixed(2)}
             </p>
           </div>
 
@@ -69,7 +76,7 @@ export function AccountOverview() {
           <div className="space-y-1">
             <p className="text-sm text-muted-foreground">Equity</p>
             <p className="text-2xl font-bold">
-              ${account.equity_usd.toFixed(2)}
+              ${equity.toFixed(2)}
             </p>
           </div>
 
@@ -78,7 +85,7 @@ export function AccountOverview() {
             <p className="text-sm text-muted-foreground">Total P&L</p>
             <div className="flex items-center gap-2">
               <p className={`text-2xl font-bold ${isProfit ? "text-green-500" : "text-red-500"}`}>
-                ${account.total_pnl.toFixed(2)}
+                ${totalPnl.toFixed(2)}
               </p>
               {isProfit ? (
                 <TrendingUp className="w-5 h-5 text-green-500" />
@@ -110,14 +117,14 @@ export function AccountOverview() {
         <div className="mt-6 pt-4 border-t border-border/50 grid grid-cols-2 gap-4">
           <div>
             <p className="text-xs text-muted-foreground">Unrealized P&L</p>
-            <p className={`text-lg font-semibold ${account.unrealized_pnl >= 0 ? "text-green-500" : "text-red-500"}`}>
-              ${account.unrealized_pnl.toFixed(2)}
+            <p className={`text-lg font-semibold ${unrealizedPnl >= 0 ? "text-green-500" : "text-red-500"}`}>
+              ${unrealizedPnl.toFixed(2)}
             </p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Realized P&L</p>
-            <p className={`text-lg font-semibold ${account.realized_pnl >= 0 ? "text-green-500" : "text-red-500"}`}>
-              ${account.realized_pnl.toFixed(2)}
+            <p className={`text-lg font-semibold ${realizedPnl >= 0 ? "text-green-500" : "text-red-500"}`}>
+              ${realizedPnl.toFixed(2)}
             </p>
           </div>
         </div>

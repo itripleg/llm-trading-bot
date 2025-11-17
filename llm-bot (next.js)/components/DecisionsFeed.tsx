@@ -66,16 +66,16 @@ function DecisionCard({ decision }: { decision: BotDecision }) {
       <div className="grid grid-cols-3 gap-3 mb-3 text-sm">
         <div>
           <p className="text-xs text-muted-foreground">Size</p>
-          <p className="font-mono">${decision.quantity_usd.toFixed(2)}</p>
+          <p className="font-mono">${(decision.quantity_usd ?? 0).toFixed(2)}</p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Leverage</p>
-          <p className="font-mono">{decision.leverage}x</p>
+          <p className="font-mono">{decision.leverage ?? 1}x</p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Confidence</p>
           <p className={`font-mono font-semibold ${confidenceColor}`}>
-            {(decision.confidence * 100).toFixed(0)}%
+            {((decision.confidence ?? 0) * 100).toFixed(0)}%
           </p>
         </div>
       </div>
@@ -89,7 +89,7 @@ function DecisionCard({ decision }: { decision: BotDecision }) {
               <div>
                 <span className="text-xs text-muted-foreground">Target: </span>
                 <span className="font-mono text-green-500">
-                  ${decision.profit_target.toFixed(2)}
+                  ${(decision.profit_target ?? 0).toFixed(2)}
                 </span>
               </div>
             )}
@@ -97,7 +97,7 @@ function DecisionCard({ decision }: { decision: BotDecision }) {
               <div>
                 <span className="text-xs text-muted-foreground">Stop: </span>
                 <span className="font-mono text-red-500">
-                  ${decision.stop_loss.toFixed(2)}
+                  ${(decision.stop_loss ?? 0).toFixed(2)}
                 </span>
               </div>
             )}
