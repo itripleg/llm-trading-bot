@@ -116,23 +116,6 @@
             </div>
         </section>
 
-        <!-- Decision History -->
-        <section class="decision-history">
-            <div class="section-header">
-                <h2>Decision History</h2>
-                <div class="filters">
-                    <button class="filter-btn active" data-filter="all">All</button>
-                    <button class="filter-btn" data-filter="buy_to_enter">Buy</button>
-                    <button class="filter-btn" data-filter="sell_to_enter">Sell</button>
-                    <button class="filter-btn" data-filter="hold">Hold</button>
-                    <button class="filter-btn" data-filter="close">Close</button>
-                </div>
-            </div>
-            <div id="decision-cards-container">
-                <div class="no-data-card">No historical decisions</div>
-            </div>
-        </section>
-
         <!-- Positions (Compact when empty) -->
         <section class="positions-compact" id="positions-section" style="display: none;">
             <h2>Active Positions</h2>
@@ -155,7 +138,6 @@
             botStop: '/api/bot/stop'
         };
 
-        let currentFilter = 'all';
         let allDecisions = [];
         let currentDecisionIndex = 0;
 
@@ -695,9 +677,6 @@
                             }
                         });
                     }, 100);
-
-                    // Show decision history (skip first one since it's shown as latest)
-                    updateDecisionHistory();
                 } else {
                     document.getElementById('total-decisions').textContent = '0';
                     document.getElementById('decision-nav').style.display = 'none';
@@ -731,28 +710,10 @@
             indicator.textContent = `${currentDecisionIndex + 1} of ${allDecisions.length}`;
 
             // Disable/enable buttons based on position
-            prevBtn.disabled = currentDecisionIndex === 0;
-            nextBtn.disabled = currentDecisionIndex === allDecisions.length - 1;
-        }
-
-        // Update decision history with filtering
-        function updateDecisionHistory() {
-            const container = document.getElementById('decision-cards-container');
-
-            // Filter decisions (skip the first one as it's shown in "Latest")
-            let filtered = allDecisions.slice(1);
-
-            if (currentFilter !== 'all') {
-                filtered = filtered.filter(d => d.signal === currentFilter);
-            }
-
-            if (filtered.length === 0) {
-                container.innerHTML = '<div class="no-data-card">No decisions match this filter</div>';
-                return;
-            }
-
-            // Create cards
-            container.innerHTML = filtered.map(d => createDecisionCard(d, false)).join('');
+            // Previous (older) button disabled when at oldest decision
+            prevBtn.disabled = currentDecisionIndex === allDecisions.length - 1;
+            // Next (newer) button disabled when at newest decision
+            nextBtn.disabled = currentDecisionIndex === 0;
         }
 
         // Update positions
@@ -860,26 +821,18 @@
             });
         }
 
-        // Filter buttons
-        document.querySelectorAll('.filter-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                currentFilter = btn.dataset.filter;
-                updateDecisionHistory();
-            });
-        });
-
         // Navigation buttons
+        // Previous = older decision (came before chronologically) = higher index
         document.getElementById('prev-btn').addEventListener('click', () => {
-            if (currentDecisionIndex > 0) {
-                showDecisionAtIndex(currentDecisionIndex - 1);
+            if (currentDecisionIndex < allDecisions.length - 1) {
+                showDecisionAtIndex(currentDecisionIndex + 1);
             }
         });
 
+        // Next = newer decision (came after chronologically) = lower index
         document.getElementById('next-btn').addEventListener('click', () => {
-            if (currentDecisionIndex < allDecisions.length - 1) {
-                showDecisionAtIndex(currentDecisionIndex + 1);
+            if (currentDecisionIndex > 0) {
+                showDecisionAtIndex(currentDecisionIndex - 1);
             }
         });
 
