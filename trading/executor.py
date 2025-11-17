@@ -5,9 +5,14 @@ This module handles real order placement on Hyperliquid exchange.
 Supports both testnet and mainnet trading.
 """
 
+import sys
 import logging
+from pathlib import Path
 from typing import Optional, Dict, Any
 from decimal import Decimal
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import eth_account
 from eth_account.signers.local import LocalAccount
