@@ -457,23 +457,34 @@ def run_bot():
     set_database_path(db_mode)
     print(f"\nUsing database: trading_bot_{db_mode}.db", flush=True)
 
-    # Initialize trading account (loads from DB or starts with $1000)
-    print("Initializing trading account...", flush=True)
-    account = TradingAccount(initial_balance=1000.0)
-    print(f"Account state: {account}", flush=True)
-    print("="*70, flush=True)
-
-    # Initialize executor if in live mode
+    # Initialize components based on mode
     executor = None
+    account = None
+
     if settings.is_live_trading():
+        # LIVE MODE: Initialize Hyperliquid executor
         print("\nInitializing Hyperliquid executor...", flush=True)
         try:
             executor = HyperliquidExecutor(testnet=settings.hyperliquid_testnet)
+
+            # Get and display real account balance
+            live_state = executor.get_account_state()
+            balance = live_state.get('account_value', 0)
             print(f"Executor initialized successfully!", flush=True)
+            print(f"Live account balance: ${balance:.2f}", flush=True)
+
+            # Create dummy TradingAccount for internal use (not used for balance tracking)
+            account = TradingAccount(initial_balance=1000.0)
         except Exception as e:
             print(f"[ERROR] Failed to initialize executor: {e}", flush=True)
             print("Make sure HYPERLIQUID_WALLET_PRIVATE_KEY is set in .env", flush=True)
             return
+        print("="*70, flush=True)
+    else:
+        # PAPER MODE: Initialize simulated trading account
+        print("\nInitializing paper trading account...", flush=True)
+        account = TradingAccount(initial_balance=1000.0)
+        print(f"Account state: {account}", flush=True)
         print("="*70, flush=True)
 
     # Set up signal handler
