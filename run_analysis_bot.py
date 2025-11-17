@@ -235,8 +235,10 @@ def execute_trade(
                 # Log filled position to database
                 if filled and fill_price:
                     from datetime import datetime
+                    from trading.logger import get_logger
+                    trade_logger = get_logger()
                     position_id = f"{coin.split('/')[0]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                    logger.log_position_entry(
+                    trade_logger.log_position_entry(
                         position_id=position_id,
                         coin=coin,
                         side='long' if is_buy else 'short',
