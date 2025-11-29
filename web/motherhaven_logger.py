@@ -95,7 +95,9 @@ class MotherhavenLogger:
     def log_decision(
         self,
         decision_data: Dict[str, Any],
-        raw_response: Optional[str] = None
+        raw_response: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        user_prompt: Optional[str] = None
     ) -> bool:
         """
         Log a Claude trading decision to Motherhaven.
@@ -103,6 +105,8 @@ class MotherhavenLogger:
         Args:
             decision_data: Dictionary with keys matching TradeDecision model
             raw_response: Optional raw JSON response from Claude
+            system_prompt: Optional system prompt sent to Claude
+            user_prompt: Optional user prompt sent to Claude
 
         Returns:
             True if successfully posted
@@ -130,6 +134,12 @@ class MotherhavenLogger:
         # Add raw response if available
         if raw_response:
             payload['raw_response'] = raw_response
+
+        # Add prompts if available
+        if system_prompt:
+            payload['system_prompt'] = system_prompt
+        if user_prompt:
+            payload['user_prompt'] = user_prompt
 
         return self._post("/api/llm-bot/ingest/decision", payload)
 

@@ -70,7 +70,9 @@ class TradingLogger:
     def log_decision(
         self,
         decision: Dict[str, Any],
-        raw_response: Optional[str] = None
+        raw_response: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        user_prompt: Optional[str] = None
     ) -> int:
         """
         Log a Claude trading decision to SQLite and Motherhaven.
@@ -78,6 +80,8 @@ class TradingLogger:
         Args:
             decision: TradeDecision dictionary from llm/parser.py
             raw_response: Optional raw JSON string from Claude
+            system_prompt: Optional system prompt sent to Claude
+            user_prompt: Optional user prompt sent to Claude
 
         Returns:
             Database ID of the saved decision
@@ -86,20 +90,16 @@ class TradingLogger:
             decision_id = logger.log_decision({
                 'coin': 'BTC/USDC:USDC',
                 'signal': 'buy_to_enter',
-                'quantity_usd': 50.0,
-                'leverage': 2.0,
-                'confidence': 0.75,
-                'exit_plan': {...},
-                'justification': '...'
-            })
+                ...
+            }, raw_response, system_prompt, user_prompt)
         """
         # Save to SQLite (always)
-        decision_id = save_decision(decision, raw_response)
+        decision_id = save_decision(decision, raw_response, system_prompt, user_prompt)
 
         # Send to Motherhaven API (if enabled)
         if self.motherhaven:
             try:
-                self.motherhaven.log_decision(decision, raw_response)
+                self.motherhaven.log_decision(decision, raw_response, system_prompt, user_prompt)
             except Exception as e:
                 logger.warning(f"[Motherhaven] Failed to log decision: {e}")
 
@@ -363,7 +363,7 @@ class TradingLogger:
         # Send to Motherhaven API (if enabled) - uses self.log_decision logic
         if self.motherhaven:
             try:
-                self.motherhaven.log_decision(decision_dict, raw_response)
+                self.motherhaven.log_decision(decision_dict, raw_response, system_prompt, user_prompt)
             except Exception as e:
                 logger.warning(f"[Motherhaven] Failed to log decision: {e}")
 
