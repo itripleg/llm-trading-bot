@@ -30,7 +30,8 @@ from web.database import (
     get_all_positions,
     get_latest_bot_status,
     get_bot_status_history,
-    set_database_path
+    set_database_path,
+    get_db_connection
 )
 from config.settings import settings
 
@@ -201,6 +202,61 @@ def api_stats():
         'current_equity': account['equity_usd'] if account else 0,
         'sharpe_ratio': account['sharpe_ratio'] if account else None
     })
+
+
+@app.route('/api/debug/database')
+def api_debug_database():
+    """
+    Get raw database entries for debugging.
+
+    Query params:
+        table (str): Table name (decisions, account_state, positions, bot_status)
+        limit (int): Number of records to return (default: 5)
+
+    Returns:
+        JSON with raw database entries
+    """
+    table = request.args.get('table', default='decisions', type=str)
+    limit = request.args.get('limit', default=5, type=int)
+
+    valid_tables = ['decisions', 'account_state', 'positions', 'bot_status']
+    if table not in valid_tables:
+        return jsonify({
+            'error': f'Invalid table. Must be one of: {", ".join(valid_tables)}'
+        }), 400
+
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            # Get table schema
+            cursor.execute(f"PRAGMA table_info({table})")
+            schema = [dict(row) for row in cursor.fetchall()]
+
+            # Get recent entries
+            cursor.execute(f"""
+                SELECT * FROM {table}
+                ORDER BY id DESC
+                LIMIT ?
+            """, (limit,))
+            entries = [dict(row) for row in cursor.fetchall()]
+
+            # Get total count
+            cursor.execute(f"SELECT COUNT(*) as count FROM {table}")
+            total_count = cursor.fetchone()['count']
+
+            return jsonify({
+                'table': table,
+                'total_count': total_count,
+                'limit': limit,
+                'schema': schema,
+                'entries': entries
+            })
+
+    except Exception as e:
+        return jsonify({
+            'error': f'Database query failed: {str(e)}'
+        }), 500
 
 
 # ============================================================================

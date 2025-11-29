@@ -121,6 +121,31 @@
             <h2>Active Positions</h2>
             <div id="positions-list"></div>
         </section>
+
+        <!-- Database Debug Section -->
+        <section class="database-debug">
+            <div class="section-header">
+                <h2>Database Debug</h2>
+                <span class="activity-subtitle">Raw database entries for inspection</span>
+            </div>
+
+            <!-- Table selector -->
+            <div style="margin-bottom: 16px;">
+                <label for="debug-table-select" style="margin-right: 8px; font-weight: 500;">Table:</label>
+                <select id="debug-table-select" style="padding: 6px 12px; border: 1px solid #ced4da; border-radius: 4px;">
+                    <option value="decisions">Decisions</option>
+                    <option value="account_state">Account State</option>
+                    <option value="positions">Positions</option>
+                    <option value="bot_status">Bot Status</option>
+                </select>
+                <button onclick="loadDebugData()" style="margin-left: 8px; padding: 6px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Reload</button>
+            </div>
+
+            <!-- Database entries display -->
+            <div id="debug-entries" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 16px; max-height: 600px; overflow-y: auto;">
+                <div style="color: #6c757d;">Loading...</div>
+            </div>
+        </section>
     </div>
 
     <script>
@@ -135,7 +160,8 @@
             botStart: '/api/bot/start',
             botPause: '/api/bot/pause',
             botResume: '/api/bot/resume',
-            botStop: '/api/bot/stop'
+            botStop: '/api/bot/stop',
+            debugDatabase: '/api/debug/database'
         };
 
         let allDecisions = [];
@@ -805,6 +831,54 @@
             }
         }
 
+        // Load debug database data
+        async function loadDebugData() {
+            const table = document.getElementById('debug-table-select').value;
+            const container = document.getElementById('debug-entries');
+
+            try {
+                container.innerHTML = '<div style="color: #6c757d;">Loading...</div>';
+
+                const response = await fetch(`${API.debugDatabase}?table=${table}&limit=3`);
+                const data = await response.json();
+
+                if (data.error) {
+                    container.innerHTML = `<div style="color: #dc3545;">Error: ${data.error}</div>`;
+                    return;
+                }
+
+                // Build HTML
+                let html = `
+                    <div style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #dee2e6;">
+                        <strong>Table:</strong> ${data.table}<br>
+                        <strong>Total Entries:</strong> ${data.total_count}<br>
+                        <strong>Showing:</strong> ${data.entries.length} most recent
+                    </div>
+                `;
+
+                if (data.entries.length === 0) {
+                    html += '<div style="color: #6c757d; padding: 20px; text-align: center;">No entries found</div>';
+                } else {
+                    data.entries.forEach((entry, index) => {
+                        html += `
+                            <div style="margin-bottom: 20px; padding: 16px; background: white; border-radius: 4px; border-left: 4px solid #007bff;">
+                                <div style="font-weight: bold; margin-bottom: 12px; color: #495057;">
+                                    Entry #${entry.id || index + 1}
+                                    ${entry.timestamp ? `<span style="float: right; font-weight: normal; color: #6c757d; font-size: 0.9em;">${new Date(entry.timestamp).toLocaleString()}</span>` : ''}
+                                </div>
+                                <pre style="background: #f8f9fa; padding: 12px; border-radius: 4px; overflow-x: auto; margin: 0; font-size: 0.85em; line-height: 1.5;"><code>${JSON.stringify(entry, null, 2)}</code></pre>
+                            </div>
+                        `;
+                    });
+                }
+
+                container.innerHTML = html;
+            } catch (error) {
+                console.error('Error loading debug data:', error);
+                container.innerHTML = `<div style="color: #dc3545;">Failed to load data: ${error.message}</div>`;
+            }
+        }
+
         // Update all data
         async function updateAll() {
             await Promise.all([
@@ -856,9 +930,16 @@
 
         // Initial load
         updateAll();
+        loadDebugData(); // Load debug data on initial load
 
         // Auto-refresh every 30 seconds
         setInterval(updateAll, 30000);
+
+        // Auto-refresh debug data every 60 seconds
+        setInterval(loadDebugData, 60000);
+
+        // Reload debug data when table selection changes
+        document.getElementById('debug-table-select').addEventListener('change', loadDebugData);
     </script>
 </body>
 </html>

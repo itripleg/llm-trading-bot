@@ -110,8 +110,8 @@ class Settings(BaseSettings):
         description="Enable logging to Motherhaven dashboard"
     )
     motherhaven_api_url: str = Field(
-        default="http://localhost:3000",
-        description="Base URL of Motherhaven Next.js API"
+        default="https://motherhaven.app",
+        description="Base URL of Motherhaven Next.js API (production: https://motherhaven.app, dev: http://localhost:3000)"
     )
     motherhaven_api_key: str = Field(
         default="",

@@ -133,6 +133,15 @@ def init_database():
             cursor.execute("ALTER TABLE decisions ADD COLUMN user_prompt TEXT")
             print("[DB Migration] Added prompt columns to decisions table")
 
+        # Migrate decisions table to add execution tracking columns
+        try:
+            cursor.execute("SELECT execution_status FROM decisions LIMIT 1")
+        except sqlite3.OperationalError:
+            cursor.execute("ALTER TABLE decisions ADD COLUMN execution_status TEXT DEFAULT 'pending'")
+            cursor.execute("ALTER TABLE decisions ADD COLUMN execution_error TEXT")
+            cursor.execute("ALTER TABLE decisions ADD COLUMN execution_timestamp TEXT")
+            print("[DB Migration] Added execution tracking columns to decisions table")
+
         # Bot status table - activity logs
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS bot_status (
@@ -258,6 +267,38 @@ def get_decisions_by_coin(coin: str, limit: int = 20) -> List[Dict[str, Any]]:
         """, (coin, limit))
 
         return [dict(row) for row in cursor.fetchall()]
+
+
+def update_decision_execution(
+    decision_id: int,
+    status: str,
+    error: Optional[str] = None
+) -> bool:
+    """
+    Update a decision's execution status.
+
+    Args:
+        decision_id: ID of the decision to update
+        status: Execution status ('success', 'failed', 'skipped', 'pending')
+        error: Optional error message if execution failed
+
+    Returns:
+        True if updated successfully
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        timestamp = datetime.utcnow().isoformat()
+
+        cursor.execute("""
+            UPDATE decisions
+            SET execution_status = ?,
+                execution_error = ?,
+                execution_timestamp = ?
+            WHERE id = ?
+        """, (status, error, timestamp, decision_id))
+
+        return cursor.rowcount > 0
 
 
 # ============================================================================

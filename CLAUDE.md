@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Alpha Arena Mini** is a Python-based LLM trading bot that executes trades on Hyperliquid based on Claude's analysis of market data. The bot runs a continuous loop: every 2-3 minutes it fetches market data, calculates technical indicators, sends them to Claude via a carefully crafted prompt, receives structured trade decisions, and executes them on Hyperliquid. Multiple instances can be deployed using different API keys to test different LLMs or strategies.
 
 Key specs:
-- **Language**: Python 3.10+
+- **Language**: Python 3.12+ (required for pandas-ta)
 - **Exchange**: Hyperliquid (via ccxt library)
 - **Primary LLM**: Anthropic Claude
 - **Capital**: Starting small ($100-$200) after paper trading validation
@@ -87,8 +87,12 @@ alpha-arena-mini/
 ## Common Commands
 
 ```bash
-# Setup and installation
-python -m venv venv
+# Setup and installation (using uv - recommended)
+uv venv --python 3.12                    # Create Python 3.12 venv
+uv pip install -r requirements.txt       # Install dependencies (fast!)
+
+# OR traditional approach
+python -m venv venv                      # Requires Python 3.12+
 venv\Scripts\activate                    # Windows
 source venv/bin/activate                 # Mac/Linux
 pip install -r requirements.txt
@@ -107,6 +111,13 @@ python llm/client.py                     # Test LLM integration
 
 # Run paper trading
 python main.py --mode paper
+# OR with uv (no activation needed)
+uv run python main.py --mode paper
+
+# Run the analysis bot (recommended)
+python run_analysis_bot.py
+# OR with uv
+uv run python run_analysis_bot.py
 
 # Run live trading (after validation)
 python main.py --mode live --capital 100

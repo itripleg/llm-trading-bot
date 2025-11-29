@@ -28,7 +28,7 @@ from trading.logger import TradingLogger
 from trading.account import TradingAccount
 from trading.executor import HyperliquidExecutor  # Live trading
 from config.settings import settings
-from web.database import get_closed_positions, get_recent_decisions, set_database_path, save_account_state
+from web.database import get_closed_positions, get_recent_decisions, set_database_path, save_account_state, update_decision_execution
 
 # Control file for start/stop
 CONTROL_FILE = Path(__file__).parent / "data" / "bot_control.txt"
@@ -250,11 +250,22 @@ def execute_trade(
                         leverage=decision.leverage
                     )
                     print(f"  [DB] Position logged: {position_id}", flush=True)
+                    # Update decision execution status to success
+                    update_decision_execution(decision_id, 'success')
+                elif error_msg:
+                    # Update decision execution status with error
+                    update_decision_execution(decision_id, 'failed', error=error_msg)
+                    # Also log to bot_status for visibility
+                    from trading.logger import get_logger
+                    get_logger().log_bot_status('error', f'Trade execution failed for {coin}', error=error_msg)
 
                 if not filled and not error_msg:
                     print(f"  [UNKNOWN] Order status unclear - check Hyperliquid", flush=True)
+                    update_decision_execution(decision_id, 'failed', error='Order status unclear from Hyperliquid')
             else:
                 print(f"  [FAILED] Live order failed - check logs", flush=True)
+                error_detail = result.get('error', 'Unknown API error') if result else 'No response from Hyperliquid'
+                update_decision_execution(decision_id, 'failed', error=error_detail)
 
         else:
             # PAPER TRADING
@@ -269,9 +280,10 @@ def execute_trade(
                     decision_id=decision_id
                 )
                 print(f"  [PAPER] Opened {side} position", flush=True)
+                update_decision_execution(decision_id, 'success')
             else:
                 # Error details already printed by can_open_position()
-                pass
+                update_decision_execution(decision_id, 'skipped', error='Insufficient balance or risk limits exceeded')
 
     elif signal == 'close':
         if is_live:
@@ -280,19 +292,24 @@ def execute_trade(
             result = executor.market_close(coin)
             if result:
                 print(f"  [SUCCESS] Position closed!", flush=True)
+                update_decision_execution(decision_id, 'success')
             else:
                 print(f"  [INFO] No position to close or close failed", flush=True)
+                update_decision_execution(decision_id, 'failed', error='No position to close or close operation failed')
         else:
             # PAPER TRADING
             if coin in account.positions:
                 account.close_position(coin, exit_price=current_price)
                 print(f"  [PAPER] Position closed", flush=True)
+                update_decision_execution(decision_id, 'success')
             else:
                 print(f"  [INFO] No position to close for {coin}", flush=True)
+                update_decision_execution(decision_id, 'skipped', error='No position to close')
 
     elif signal == 'hold':
         # Just hold - same for both modes
         print(f"  [HOLD] No action taken", flush=True)
+        update_decision_execution(decision_id, 'success')  # Hold is always successful
         if not is_live and coin in account.positions:
             unrealized_pnl = account.positions[coin].calculate_pnl(current_price)
             print(f"    Current position unrealized PnL: ${unrealized_pnl:+.2f}", flush=True)

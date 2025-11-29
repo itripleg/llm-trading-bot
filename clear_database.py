@@ -9,11 +9,14 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from web.database import get_db_connection, init_database
+from web.database import get_db_connection, init_database, set_database_path
 
-def clear_all_data():
+def clear_all_data(mode='live'):
     """Delete all records from all tables."""
-    print("Clearing trading database...")
+    set_database_path(mode)
+    init_database()
+
+    print(f"\nClearing {mode.upper()} trading database...")
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -41,12 +44,24 @@ def clear_all_data():
     print(f"  Deleted {positions_deleted} positions")
     print(f"  Deleted {status_deleted} status logs")
     print()
-    print("[OK] Database cleared! Starting fresh.")
+    print(f"[OK] {mode.upper()} database cleared! Starting fresh.")
 
 if __name__ == "__main__":
-    confirm = input("Are you sure you want to clear ALL data? (yes/no): ")
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Clear trading bot database')
+    parser.add_argument('--mode', choices=['live', 'paper', 'both'], default='live',
+                        help='Which database to clear (default: live)')
+
+    args = parser.parse_args()
+
+    confirm = input(f"Are you sure you want to clear {args.mode.upper()} database? (yes/no): ")
 
     if confirm.lower() == 'yes':
-        clear_all_data()
+        if args.mode == 'both':
+            clear_all_data('live')
+            clear_all_data('paper')
+        else:
+            clear_all_data(args.mode)
     else:
         print("Cancelled.")

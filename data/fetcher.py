@@ -64,13 +64,20 @@ class MarketDataFetcher:
         try:
             ticker = self.exchange.fetch_ticker(symbol)
 
+            # Handle None timestamp from Hyperliquid
+            timestamp_ms = ticker.get("timestamp")
+            if timestamp_ms is None:
+                timestamp = datetime.now()
+            else:
+                timestamp = datetime.fromtimestamp(timestamp_ms / 1000)
+
             return {
                 "symbol": symbol,
                 "price": ticker.get("last"),
                 "bid": ticker.get("bid"),
                 "ask": ticker.get("ask"),
                 "volume": ticker.get("quoteVolume"),
-                "timestamp": datetime.fromtimestamp(ticker.get("timestamp", 0) / 1000),
+                "timestamp": timestamp,
             }
 
         except ccxt.ExchangeNotAvailable as e:
