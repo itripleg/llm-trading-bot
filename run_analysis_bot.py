@@ -22,13 +22,22 @@ sys.path.insert(0, str(Path(__file__).parent))
 from data.fetcher import MarketDataFetcher
 from data.indicators import TechnicalIndicators
 from llm.client import ClaudeClient
-from llm.prompts import get_system_prompt, build_user_prompt
+from llm.prompts import PromptBuilder, TradingConfig
 from llm.parser import parse_llm_response
 from trading.logger import TradingLogger
 from trading.account import TradingAccount
 from trading.executor import HyperliquidExecutor  # Live trading
 from config.settings import settings
-from web.database import get_closed_positions, get_recent_decisions, set_database_path, save_account_state, update_decision_execution
+from web.database import (
+    get_closed_positions, 
+    get_recent_decisions, 
+    set_database_path, 
+    save_account_state, 
+    update_decision_execution,
+    save_position_entry,
+    close_position,
+    get_open_positions
+)
 
 # Control file for start/stop
 CONTROL_FILE = Path(__file__).parent / "data" / "bot_control.txt"
@@ -116,8 +125,14 @@ def get_current_account_state(
 
                     # NOTE: Hyperliquid doesn't provide entry_time, so we use a placeholder
                     # For accurate tracking, positions should be logged to DB when opened
+                    
+                    # Hyperliquid returns short symbols like "ARB", "BTC", "ETH"
+                    # We need to convert to the format used in trading_assets: "BTC/USDC:USDC"
+                    # Hyperliquid perps are quoted in USDC
+                    full_symbol = f"{coin}/USDC:USDC"
+                    
                     positions_list.append({
-                        'coin': f"{coin}/USDC:USDC",
+                        'coin': full_symbol,
                         'side': 'long' if size > 0 else 'short',
                         'entry_price': float(pos.get('entryPx', 0)),
                         'current_price': float(pos.get('entryPx', 0)),  # TODO: Get live price
@@ -293,6 +308,45 @@ def execute_trade(
             if result:
                 print(f"  [SUCCESS] Position closed!", flush=True)
                 update_decision_execution(decision_id, 'success')
+                
+                # Log to database
+                # First check if we have this position tracked in DB
+                open_positions = get_open_positions()
+                db_position = next((p for p in open_positions if p['coin'] == coin), None)
+                
+                if db_position:
+                    # Close existing DB position
+                    close_position(
+                        position_id=db_position['position_id'],
+                        exit_price=current_price,
+                        realized_pnl=0.0  # TODO: Get real PnL from Hyperliquid response if possible
+                    )
+                    print(f"  [DB] Position closed: {db_position['position_id']}", flush=True)
+                else:
+                    # Position was opened externally or before bot started
+                    # Create a synthetic entry then close it
+                    from datetime import datetime
+                    position_id = f"{coin.split('/')[0]}_EXT_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                    
+                    # We need to estimate entry details since we don't have them
+                    # Try to get them from the executor if possible, otherwise use current values
+                    # For now, we'll just log what we know
+                    save_position_entry(
+                        position_id=position_id,
+                        coin=coin,
+                        side='unknown', # We don't know if it was long/short without querying
+                        entry_price=current_price, # Placeholder
+                        quantity_usd=decision.quantity_usd,
+                        leverage=decision.leverage,
+                        decision_id=decision_id
+                    )
+                    
+                    close_position(
+                        position_id=position_id,
+                        exit_price=current_price,
+                        realized_pnl=0.0
+                    )
+                    print(f"  [DB] External position logged and closed: {position_id}", flush=True)
             else:
                 print(f"  [INFO] No position to close or close failed", flush=True)
                 update_decision_execution(decision_id, 'failed', error='No position to close or close operation failed')
@@ -488,8 +542,16 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
         # Calculate minutes since bot started
         minutes_since_start = int((datetime.now() - start_time).total_seconds() / 60)
 
-        system_prompt = get_system_prompt()
-        user_prompt = build_user_prompt(market_data, account_state, minutes_since_start)
+        # Create PromptBuilder with configuration
+        trading_config = TradingConfig(
+            exchange_name=settings.exchange_name if hasattr(settings, 'exchange_name') else "Hyperliquid",
+            min_position_size_usd=settings.min_position_size_usd if hasattr(settings, 'min_position_size_usd') else 10.0,
+            max_leverage=settings.max_leverage if hasattr(settings, 'max_leverage') else 10.0,
+        )
+        prompt_builder = PromptBuilder(config=trading_config)
+        
+        system_prompt = prompt_builder.get_system_prompt()
+        user_prompt = prompt_builder.build_trading_prompt(market_data, account_state, minutes_since_start)
 
         # Get Claude's decision
         print(f"\n[4/4] Getting Claude's analysis...", flush=True)
@@ -511,6 +573,18 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
         # Get the coin Claude decided on and its current price
         decision_coin = decision.coin
         decision_price = current_prices.get(decision_coin)
+
+        # If Claude returned a shortened symbol (e.g., "ARB" instead of "ARB/USDC:USDC"),
+        # try to find a match in current_prices
+        if not decision_price:
+            # Try to find a matching symbol that starts with the decision_coin
+            for available_coin in current_prices.keys():
+                if available_coin.startswith(decision_coin + "/"):
+                    print(f"  [INFO] Normalized symbol: {decision_coin} → {available_coin}", flush=True)
+                    decision_coin = available_coin
+                    decision.coin = available_coin  # Update the decision object
+                    decision_price = current_prices[available_coin]
+                    break
 
         if not decision_price:
             print(f"  [ERROR] No market data for {decision_coin}", flush=True)
