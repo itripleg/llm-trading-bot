@@ -135,11 +135,13 @@ body {
     grid-template-columns: 1fr 320px;
     gap: 0;
     flex: 1;
+    overflow: hidden;
 }
 
 .main-content {
     padding: 0;
     overflow-y: auto;
+    height: 100%;
 }
 
 .sidebar {
@@ -148,8 +150,9 @@ body {
     padding: 0;
     overflow-y: auto;
     position: sticky;
-    top: 0;
-    height: calc(100vh - 140px); /* Subtract header height */
+    top: 50px; /* Stick below tabs */
+    height: calc(100vh - 50px); /* Full height minus tabs */
+    align-self: flex-start;
 }
 
 /* Sidebar Sections */
@@ -203,6 +206,134 @@ header {
     top: 0;
     z-index: 100;
     backdrop-filter: blur(10px);
+}
+
+/* Network Toggle */
+.network-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-tertiary);
+    padding: 5px;
+    border-radius: 24px;
+    border: 2px solid var(--border-primary);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+
+.network-toggle-btn {
+    padding: 8px 20px;
+    border-radius: 20px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-weight: 700;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+}
+
+.network-toggle-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.network-toggle-btn.active {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.1);
+}
+
+.network-toggle-btn.active.mainnet {
+    color: var(--color-profit);
+    background: rgba(0, 230, 118, 0.2);
+    border: 1px solid var(--color-profit);
+    box-shadow: 0 0 20px rgba(0, 230, 118, 0.3);
+}
+
+.network-toggle-btn.active.testnet {
+    color: var(--color-warning);
+    background: rgba(255, 179, 0, 0.2);
+    border: 1px solid var(--color-warning);
+    box-shadow: 0 0 20px rgba(255, 179, 0, 0.3);
+    animation: pulse-warning 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-warning {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+/* Main Navigation Tabs */
+.main-tabs {
+    display: flex;
+    gap: 0;
+    background: var(--bg-tertiary);
+    border-bottom: 2px solid var(--border-primary);
+    padding: 0 var(--spacing-lg);
+    position: sticky;
+    top: 0;
+    z-index: 99;
+    backdrop-filter: blur(10px);
+}
+
+.main-tab {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md) var(--spacing-lg);
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    position: relative;
+}
+
+.main-tab svg {
+    opacity: 0.7;
+    transition: opacity 0.3s ease;
+}
+
+.main-tab:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.main-tab:hover svg {
+    opacity: 1;
+}
+
+.main-tab.active {
+    color: var(--color-profit);
+    border-bottom-color: var(--color-profit);
+    background: rgba(0, 230, 118, 0.05);
+}
+
+.main-tab.active svg {
+    opacity: 1;
+}
+
+/* Tab Content */
+.tab-content {
+    display: none;
+    flex: 1;
+    overflow: hidden;
+}
+
+.tab-content.active {
+    display: flex;
+    flex-direction: column;
 }
 
 .header-top {
@@ -1048,9 +1179,13 @@ section h2 {
    DATABASE MANAGEMENT
    ============================================================================ */
 
+#tab-database {
+    padding: var(--spacing-xl);
+    overflow-y: auto;
+}
+
 .database-debug {
-    background: var(--bg-secondary);
-    border-top: 1px solid var(--border-primary);
+    background: transparent;
 }
 
 .database-container {

@@ -13,6 +13,16 @@
             <div class="header-top">
                 <h1>Alpha Arena Mini</h1>
                 <div class="header-controls">
+                    <!-- Network Toggle -->
+                    <div class="network-toggle">
+                        <button class="network-toggle-btn active mainnet" id="network-mainnet-btn" onclick="switchNetwork('mainnet')">
+                            Mainnet
+                        </button>
+                        <button class="network-toggle-btn testnet" id="network-testnet-btn" onclick="switchNetwork('testnet')">
+                            Testnet
+                        </button>
+                    </div>
+
                     <div class="bot-status-compact">
                         <span class="status-indicator unknown" id="status-dot"></span>
                         <span id="status-text">Stopped</span>
@@ -29,12 +39,6 @@
                                 <path d="M5 3h2v10H5V3zm4 0h2v10H9V3z"/>
                             </svg>
                             Pause
-                        </button>
-                        <button class="bot-control-btn stop-btn" id="stop-btn" style="display: none;">
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                                <rect x="4" y="4" width="8" height="8"/>
-                            </svg>
-                            Stop
                         </button>
                     </div>
                 </div>
@@ -63,8 +67,29 @@
             </div>
         </header>
 
-        <!-- Main Dashboard Grid Layout -->
-        <div class="dashboard-grid">
+        <!-- Main Navigation Tabs -->
+        <nav class="main-tabs">
+            <button class="main-tab active" onclick="switchMainTab('dashboard')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                </svg>
+                Dashboard
+            </button>
+            <button class="main-tab" onclick="switchMainTab('database')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                    <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                </svg>
+                Database
+            </button>
+        </nav>
+
+        <!-- Dashboard Tab Content -->
+        <div class="tab-content active" id="tab-dashboard">
+            <!-- Main Dashboard Grid Layout -->
+            <div class="dashboard-grid">
             <!-- Main Content Area -->
             <div class="main-content">
                 <!-- Latest Decision - Main Focus -->
@@ -101,14 +126,6 @@
                     <div id="positions-list"></div>
                 </div>
 
-                <!-- Bot Activity -->
-                <div class="sidebar-section">
-                    <h3>Activity Log</h3>
-                    <div class="activity-console" id="activity-console">
-                        <div class="console-message">Waiting for bot activity...</div>
-                    </div>
-                </div>
-
                 <!-- Supervisor Input Section (Compact) -->
                 <div class="sidebar-section">
                     <h3>Supervisor Input</h3>
@@ -116,7 +133,7 @@
                         <textarea id="supervisor-message" placeholder="Enter bot guidance..." rows="2"></textarea>
                         <div class="input-actions">
                             <button id="send-input-btn" class="primary-btn">Send</button>
-                            <button id="clear-input-btn" class="secondary-btn" style="display: none;">Clear</button>
+                            <button id="clear-input-btn" class="secondary-btn">Clear</button>
                         </div>
                     </div>
                     <div id="active-input-display" style="display: none; margin-top: 12px; padding: 12px; background: rgba(40, 167, 69, 0.1); border-left: 4px solid #28a745; border-radius: 4px;">
@@ -125,11 +142,21 @@
                         <div id="active-input-time" style="font-size: 0.7em; color: var(--text-muted); margin-top: 4px;"></div>
                     </div>
                 </div>
+
+                <!-- Bot Activity -->
+                <div class="sidebar-section">
+                    <h3>Activity Log</h3>
+                    <div class="activity-console" id="activity-console">
+                        <div class="console-message">Waiting for bot activity...</div>
+                    </div>
+                </div>
             </div>
         </div>
+        </div>
 
-        <!-- Database Management Section (Redesigned) -->
-        <section class="database-debug">
+        <!-- Database Tab Content -->
+        <div class="tab-content" id="tab-database">
+            <section class="database-debug">
             <div class="section-header">
                 <h2>Database Explorer</h2>
                 <span class="activity-subtitle">View trading history and manage local data</span>
@@ -272,10 +299,19 @@
                 </div>
             </div>
         </section>
+        </div>
     </div>
 
     <script>
-        // API endpoints
+        // Current network (mainnet or testnet)
+        let currentNetwork = localStorage.getItem('network') || 'mainnet';
+
+        // API endpoints with network parameter
+        const getApiUrl = (endpoint) => {
+            const separator = endpoint.includes('?') ? '&' : '?';
+            return `${endpoint}${separator}network=${currentNetwork}`;
+        };
+
         const API = {
             account: '/api/account',
             account_history: '/api/account/history',
@@ -294,6 +330,48 @@
 
         let allDecisions = [];
         let currentDecisionIndex = 0;
+
+        // Network switching
+        function switchNetwork(network) {
+            currentNetwork = network;
+            localStorage.setItem('network', network);
+
+            // Update UI
+            document.querySelectorAll('.network-toggle-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(`network-${network}-btn`).classList.add('active');
+
+            // Reload all data
+            console.log(`Switched to ${network}`);
+            updateAll();
+        }
+
+        // Initialize network on load
+        document.addEventListener('DOMContentLoaded', () => {
+            switchNetwork(currentNetwork);
+        });
+
+        // Main tab switching
+        function switchMainTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            // Remove active class from all tabs
+            document.querySelectorAll('.main-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Show selected tab content
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+
+            // Add active class to clicked tab
+            event.target.closest('.main-tab').classList.add('active');
+
+            console.log(`Switched to ${tabName} tab`);
+        }
 
         // Format currency
         function formatCurrency(value) {
@@ -562,6 +640,14 @@
                         </svg>
                         Raw Response
                     </button>
+
+                    <button class="raw-data-btn" onclick="toggleSection('supervisor-input-view')" id="supervisor-input-btn">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                            <path d="M5.255 5.786a.237.237 0 0 0 .241.247h.825c.138 0 .248-.113.266-.25.09-.656.54-1.134 1.342-1.134.686 0 1.314.343 1.314 1.168 0 .635-.374.927-.965 1.371-.673.489-1.206 1.06-1.168 1.987l.003.217a.25.25 0 0 0 .25.246h.811a.25.25 0 0 0 .25-.25v-.105c0-.718.273-.927 1.01-1.486.609-.463 1.244-.977 1.244-2.056 0-1.511-1.276-2.241-2.673-2.241-1.267 0-2.655.59-2.75 2.286zm1.557 5.763c0 .533.425.927 1.01.927.609 0 1.028-.394 1.028-.927 0-.552-.42-.94-1.029-.94-.584 0-1.009.388-1.009.94z"/>
+                        </svg>
+                        Supervisor Input
+                    </button>
                 </div>
 
                 ${hasUserPrompt ? `
@@ -581,6 +667,13 @@
                 <div class="raw-data-content" id="${rawDataId}" style="display: none;">
                     <h4 style="margin-top: 0; color: #333;">Raw JSON Response:</h4>
                     <pre><code>${JSON.stringify(rawData, null, 2)}</code></pre>
+                </div>
+
+                <div class="raw-data-content" id="supervisor-input-view" style="display: none;">
+                    <h4 style="margin-top: 0; color: #333;">Current Supervisor Input:</h4>
+                    <div id="supervisor-input-display-content" style="padding: 12px; background: rgba(40, 167, 69, 0.1); border-left: 4px solid #28a745; border-radius: 4px;">
+                        <div style="color: var(--text-secondary); font-style: italic;">No active supervisor input</div>
+                    </div>
                 </div>
             </div>
             `;
@@ -612,7 +705,7 @@
         // Update account stats
         async function updateAccount() {
             try {
-                const response = await fetch(API.account);
+                const response = await fetch(getApiUrl(API.account));
                 const data = await response.json();
 
                 document.getElementById('balance').textContent = formatCurrency(data.balance_usd || 0);
@@ -641,7 +734,6 @@
                 const text = document.getElementById('status-text');
                 const startBtn = document.getElementById('start-btn');
                 const pauseBtn = document.getElementById('pause-btn');
-                const stopBtn = document.getElementById('stop-btn');
 
                 // Update status indicator
                 const state = data.state || 'stopped';
@@ -652,12 +744,15 @@
                 if (state === 'running') {
                     startBtn.style.display = 'none';
                     pauseBtn.style.display = 'flex';
-                    stopBtn.style.display = 'flex';
                 } else if (state === 'paused') {
                     startBtn.style.display = 'flex';
-                    startBtn.textContent = 'Resume';
+                    startBtn.innerHTML = `
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M5 3.5v9L12 8z"/>
+                        </svg>
+                        Resume
+                    `;
                     pauseBtn.style.display = 'none';
-                    stopBtn.style.display = 'flex';
                 } else {
                     startBtn.style.display = 'flex';
                     startBtn.innerHTML = `
@@ -667,7 +762,6 @@
                         Start
                     `;
                     pauseBtn.style.display = 'none';
-                    stopBtn.style.display = 'none';
                 }
             } catch (error) {
                 console.error('Error fetching status:', error);
@@ -745,7 +839,7 @@
         // Update decisions
         async function updateDecisions() {
             try {
-                const response = await fetch(API.decisions + '?limit=50');
+                const response = await fetch(getApiUrl(API.decisions + '?limit=50'));
                 const data = await response.json();
 
                 // Handle new API format (returns object with decisions array and total_count)
@@ -835,7 +929,7 @@
         async function updatePositions() {
             try {
                 // --- Open Positions ---
-                const response = await fetch(API.positions + '?status=open');
+                const response = await fetch(getApiUrl(API.positions + '?status=open'));
                 const positions = await response.json();
 
                 const section = document.getElementById('sidebar-positions');
@@ -880,12 +974,34 @@
                 const console = document.getElementById('activity-console');
                 const history = data.history || [];
 
-                if (history.length === 0) {
+                // Consolidate consecutive "hold" actions - only show one hold until a different action
+                const filteredHistory = [];
+                let lastWasHold = false;
+
+                for (const log of history) {
+                    const message = (log.message || log.error || '').toLowerCase();
+                    const isHold = message.includes('hold') || log.status === 'hold';
+
+                    if (isHold) {
+                        // Only add hold if the previous entry wasn't a hold
+                        if (!lastWasHold) {
+                            filteredHistory.push(log);
+                            lastWasHold = true;
+                        }
+                        // Skip this hold otherwise
+                    } else {
+                        // Non-hold action, add it
+                        filteredHistory.push(log);
+                        lastWasHold = false;
+                    }
+                }
+
+                if (filteredHistory.length === 0) {
                     console.innerHTML = '<div class="console-message">Waiting for bot activity...</div>';
                 } else {
                     // Show last 10 activity logs in reverse chronological order
                     let html = '';
-                    history.forEach(log => {
+                    filteredHistory.forEach(log => {
                         const timestamp = formatRelativeTime(log.timestamp);
                         const statusClass = log.status === 'error' ? 'error' :
                                            log.status === 'running' ? 'running' :
@@ -985,7 +1101,7 @@
         // Load database overview stats
         async function loadDatabaseOverview() {
             try {
-                const response = await fetch(API.database_status);
+                const response = await fetch(getApiUrl(API.database_status));
                 const status = await response.json();
 
                 document.getElementById('stat-decisions').textContent = status.table_counts?.decisions || 0;
@@ -1001,7 +1117,7 @@
         // Load decisions table
         async function loadDecisionsTable() {
             try {
-                const response = await fetch(API.decisions + '?limit=100');
+                const response = await fetch(getApiUrl(API.decisions + '?limit=100'));
                 const data = await response.json();
                 const decisions = data.decisions || data;
 
@@ -1036,7 +1152,7 @@
         // Load positions table
         async function loadPositionsTable() {
             try {
-                const response = await fetch(API.positions + '?status=all&limit=100');
+                const response = await fetch(getApiUrl(API.positions + '?status=all&limit=100'));
                 const positions = await response.json();
 
                 const tbody = document.getElementById('positions-table-body');
@@ -1075,7 +1191,7 @@
         // Load account history table
         async function loadAccountTable() {
             try {
-                const response = await fetch(API.account_history + '?limit=50');
+                const response = await fetch(getApiUrl(API.account_history + '?limit=50'));
                 const history = await response.json();
 
                 const tbody = document.getElementById('account-table-body');
@@ -1268,10 +1384,6 @@
             pauseBot();
         });
 
-        document.getElementById('stop-btn').addEventListener('click', () => {
-            stopBot();
-        });
-
         // Initial load
         updateAll();
         loadDebugData(); // Load debug data on initial load
@@ -1295,25 +1407,47 @@
             try {
                 const response = await fetch('/api/user_input');
                 const data = await response.json();
-                
+
                 const display = document.getElementById('active-input-display');
                 const text = document.getElementById('active-input-text');
                 const time = document.getElementById('active-input-time');
                 const clearBtn = document.getElementById('clear-input-btn');
                 const indicator = document.getElementById('input-status-indicator');
-                
+
+                // Also update the Latest Analysis section display
+                const analysisDisplay = document.getElementById('supervisor-input-display-content');
+
                 if (data.message) {
+                    // Update sidebar display
                     display.style.display = 'block';
                     text.textContent = data.message;
                     time.textContent = 'Set: ' + new Date(data.timestamp).toLocaleString();
                     clearBtn.style.display = 'inline-block';
-                    indicator.style.display = 'inline-block';
-                    indicator.textContent = 'Active Guidance';
-                    indicator.className = 'status-indicator running'; // Green
+                    if (indicator) {
+                        indicator.style.display = 'inline-block';
+                        indicator.textContent = 'Active Guidance';
+                        indicator.className = 'status-indicator running'; // Green
+                    }
+
+                    // Update Latest Analysis display
+                    if (analysisDisplay) {
+                        analysisDisplay.innerHTML = `
+                            <div style="color: var(--text-primary); font-size: 0.9em; line-height: 1.5; margin-bottom: 8px;">${data.message}</div>
+                            <div style="font-size: 0.75em; color: var(--text-muted);">Set: ${new Date(data.timestamp).toLocaleString()}</div>
+                        `;
+                    }
                 } else {
+                    // No active input
                     display.style.display = 'none';
                     clearBtn.style.display = 'none';
-                    indicator.style.display = 'none';
+                    if (indicator) {
+                        indicator.style.display = 'none';
+                    }
+
+                    // Update Latest Analysis display
+                    if (analysisDisplay) {
+                        analysisDisplay.innerHTML = '<div style="color: var(--text-secondary); font-style: italic;">No active supervisor input</div>';
+                    }
                 }
             } catch (error) {
                 console.error('Error loading active input:', error);

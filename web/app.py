@@ -75,14 +75,21 @@ def api_account():
     For LIVE mode: Queries Hyperliquid API directly for real-time data
     For PAPER mode: Uses latest database snapshot
 
+    Query params:
+        network (str): 'mainnet' or 'testnet' (overrides settings if provided)
+
     Returns:
         JSON with balance, equity, PnL, positions count
     """
+    # Get network parameter from query string
+    network = request.args.get('network', default='mainnet', type=str)
+    is_testnet = (network == 'testnet')
+
     # If live trading, get real-time data from Hyperliquid
     if settings.is_live_trading():
         try:
             from trading.executor import HyperliquidExecutor
-            executor = HyperliquidExecutor(testnet=settings.hyperliquid_testnet)
+            executor = HyperliquidExecutor(testnet=is_testnet)
             live_state = executor.get_account_state()
 
             if live_state:
@@ -98,10 +105,10 @@ def api_account():
                     'total_pnl': live_state.get('unrealized_pnl', 0.0) + realized_pnl,
                     'num_positions': len(live_state.get('positions', [])),
                     'timestamp': live_state.get('timestamp'),
-                    'source': 'hyperliquid_live'
+                    'source': f'hyperliquid_live_{network}'
                 })
         except Exception as e:
-            print(f"[ERROR] Failed to fetch live Hyperliquid data: {e}")
+            print(f"[ERROR] Failed to fetch live Hyperliquid data from {network}: {e}")
             # Fall back to database
 
     # Paper mode or live mode fallback: use database
@@ -189,18 +196,21 @@ def api_positions():
     Query params:
         status (str): 'open', 'closed', or 'all' (default: 'all')
         limit (int): Number of positions to return (default: 50)
+        network (str): 'mainnet' or 'testnet' (overrides settings if provided)
 
     Returns:
         JSON array of positions
     """
     status = request.args.get('status', default='all', type=str)
     limit = request.args.get('limit', default=50, type=int)
+    network = request.args.get('network', default='mainnet', type=str)
+    is_testnet = (network == 'testnet')
 
     # If live trading and requesting open positions, get real-time data
     if settings.is_live_trading() and status == 'open':
         try:
             from trading.executor import HyperliquidExecutor
-            executor = HyperliquidExecutor(testnet=settings.hyperliquid_testnet)
+            executor = HyperliquidExecutor(testnet=is_testnet)
             live_state = executor.get_account_state()
 
             if live_state and 'positions' in live_state:
@@ -223,11 +233,11 @@ def api_positions():
                             'leverage': leverage,
                             'unrealized_pnl': float(pos.get('unrealizedPnl', 0)),
                             'status': 'open',
-                            'source': 'hyperliquid_live'
+                            'source': f'hyperliquid_live_{network}'
                         })
                 return jsonify(positions)
         except Exception as e:
-            print(f"[ERROR] Failed to fetch live positions: {e}")
+            print(f"[ERROR] Failed to fetch live positions from {network}: {e}")
             import traceback
             traceback.print_exc()
             # Fall back to database
