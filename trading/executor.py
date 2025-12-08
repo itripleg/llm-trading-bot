@@ -106,13 +106,22 @@ class HyperliquidExecutor:
                 return {}
 
             margin_summary = user_state["marginSummary"]
+            asset_positions = user_state.get("assetPositions", [])
+
+            # Calculate total unrealized PnL from all positions
+            total_unrealized_pnl = 0.0
+            for asset_pos in asset_positions:
+                if "position" in asset_pos:
+                    unrealized_pnl = float(asset_pos["position"].get("unrealizedPnl", 0))
+                    total_unrealized_pnl += unrealized_pnl
 
             return {
                 "account_value": float(margin_summary["accountValue"]),
                 "total_margin_used": float(margin_summary["totalMarginUsed"]),
                 "total_ntl_pos": float(margin_summary["totalNtlPos"]),
                 "total_raw_usd": float(margin_summary["totalRawUsd"]),
-                "positions": user_state.get("assetPositions", [])
+                "unrealized_pnl": total_unrealized_pnl,
+                "positions": asset_positions
             }
         except KeyError as e:
             logger.error(f"Failed to parse account state - missing key: {e}")
