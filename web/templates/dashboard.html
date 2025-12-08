@@ -862,38 +862,7 @@
                     list.innerHTML = html;
                 }
 
-                // --- Closed Positions ---
-                const responseClosed = await fetch(API.positions + '?status=closed&limit=10');
-                const positionsClosed = await responseClosed.json();
-                
-                const sectionClosed = document.getElementById('closed-positions-section');
-                const listClosed = document.getElementById('closed-positions-list');
-
-                if (positionsClosed.length === 0) {
-                    sectionClosed.style.display = 'none';
-                } else {
-                    sectionClosed.style.display = 'block';
-                    let html = '';
-                    positionsClosed.forEach(pos => {
-                        const pnl = pos.realized_pnl || 0;
-                        const pnlClass = pnl > 0 ? 'positive' : pnl < 0 ? 'negative' : 'neutral';
-                        html += `
-                            <div class="position-card" style="opacity: 0.8; background: #f8f9fa;">
-                                <div class="position-header">
-                                    <span class="position-coin">${pos.coin}</span>
-                                    <span class="badge ${pos.side}" style="background: #6c757d;">${pos.side.toUpperCase()}</span>
-                                    <span style="font-size: 0.8em; color: #6c757d;">${formatRelativeTime(pos.exit_time || new Date().toISOString())}</span>
-                                </div>
-                                <div class="position-details">
-                                    <span>Entry: $${pos.entry_price.toFixed(2)}</span>
-                                    <span>Exit: $${(pos.exit_price || 0).toFixed(2)}</span>
-                                    <span class="${pnlClass}" style="font-weight: bold;">PnL: $${pnl.toFixed(2)}</span>
-                                </div>
-                            </div>
-                        `;
-                    });
-                    listClosed.innerHTML = html;
-                }
+                // Closed positions removed - now available in Database Explorer "All Positions" tab
 
             } catch (error) {
                 console.error('Error fetching positions:', error);
