@@ -63,78 +63,76 @@
             </div>
         </header>
 
-        <!-- Latest Decision - Main Focus -->
-        <section class="latest-decision" id="latest-decision-section">
-            <div class="section-header">
-                <h2>Latest Analysis</h2>
-                <div class="decision-nav" id="decision-nav" style="display: none;">
-                    <button class="nav-btn" id="prev-btn" title="Previous decision">
-                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                            <path d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"/>
-                        </svg>
-                        Previous
-                    </button>
-                    <span class="nav-indicator" id="nav-indicator">1 of 1</span>
-                    <button class="nav-btn" id="next-btn" title="Next decision">
-                        Next
-                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                            <path d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"/>
-                        </svg>
-                    </button>
+        <!-- Main Dashboard Grid Layout -->
+        <div class="dashboard-grid">
+            <!-- Main Content Area -->
+            <div class="main-content">
+                <!-- Latest Decision - Main Focus -->
+                <section class="latest-decision" id="latest-decision-section">
+                    <div class="section-header">
+                        <h2>Latest Analysis</h2>
+                        <div class="decision-nav" id="decision-nav" style="display: none;">
+                            <button class="nav-btn" id="prev-btn" title="Previous decision">
+                                <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"/>
+                                </svg>
+                                Previous
+                            </button>
+                            <span class="nav-indicator" id="nav-indicator">1 of 1</span>
+                            <button class="nav-btn" id="next-btn" title="Next decision">
+                                Next
+                                <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="latest-decision-card">
+                        <div class="no-data-card">No decisions yet. Run test_real_data.py to analyze market conditions.</div>
+                    </div>
+                </section>
+
+                <!-- Closed Positions -->
+                <section class="positions-compact" id="closed-positions-section" style="display: none;">
+                    <h2>Closed Positions</h2>
+                    <div id="closed-positions-list"></div>
+                </section>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <!-- Active Positions -->
+                <div class="sidebar-section" id="sidebar-positions" style="display: none;">
+                    <h3>Active Positions</h3>
+                    <div id="positions-list"></div>
+                </div>
+
+                <!-- Bot Activity -->
+                <div class="sidebar-section">
+                    <h3>Activity Log</h3>
+                    <div class="activity-console" id="activity-console">
+                        <div class="console-message">Waiting for bot activity...</div>
+                    </div>
+                </div>
+
+                <!-- Supervisor Input Section (Compact) -->
+                <div class="sidebar-section">
+                    <h3>Supervisor Input</h3>
+                    <div class="input-container">
+                        <textarea id="supervisor-message" placeholder="Enter bot guidance..." rows="2"></textarea>
+                        <div class="input-actions">
+                            <button id="send-input-btn" class="primary-btn">Send</button>
+                            <button id="clear-input-btn" class="secondary-btn" style="display: none;">Clear</button>
+                        </div>
+                    </div>
+                    <div id="active-input-display" style="display: none; margin-top: 12px; padding: 12px; background: rgba(40, 167, 69, 0.1); border-left: 4px solid #28a745; border-radius: 4px;">
+                        <div style="font-size: 0.75em; color: #28a745; font-weight: bold; margin-bottom: 4px;">ACTIVE GUIDANCE</div>
+                        <div id="active-input-text" style="color: var(--text-primary); font-size: 0.85em;"></div>
+                        <div id="active-input-time" style="font-size: 0.7em; color: var(--text-muted); margin-top: 4px;"></div>
+                    </div>
                 </div>
             </div>
-            <div id="latest-decision-card">
-                <div class="no-data-card">No decisions yet. Run test_real_data.py to analyze market conditions.</div>
-            </div>
-        </section>
-
-        <!-- Bot Activity Console -->
-        <section class="bot-activity">
-            <div class="section-header">
-                <h2>Bot Activity</h2>
-                <span class="activity-subtitle">Real-time bot status and logs</span>
-            </div>
-
-            <!-- Activity Log -->
-
-            <!-- Activity Log -->
-            <h3 style="font-size: 1rem; margin-bottom: 12px; color: #495057;">Activity Log</h3>
-            <div class="activity-console" id="activity-console">
-                <div class="console-message">Waiting for bot activity...</div>
-            </div>
-        </section>
-
-        <!-- Positions (Compact when empty) -->
-        <section class="positions-compact" id="positions-section" style="display: none;">
-            <h2>Active Positions</h2>
-            <div id="positions-list"></div>
-        </section>
-
-        <!-- Closed Positions -->
-        <section class="positions-compact" id="closed-positions-section" style="display: none;">
-            <h2>Closed Positions</h2>
-            <div id="closed-positions-list"></div>
-        </section>
-
-        <!-- Supervisor Input Section -->
-        <section class="supervisor-input">
-            <div class="section-header">
-                <h2>Supervisor Input</h2>
-                <span class="status-indicator" id="input-status-indicator" style="display: none;">Active</span>
-            </div>
-            <div class="input-container">
-                <textarea id="supervisor-message" placeholder="Enter guidance for the bot (e.g., 'Focus on shorting ETH', 'Be more aggressive', 'Market is choppy, reduce size')..." rows="3"></textarea>
-                <div class="input-actions">
-                    <button id="send-input-btn" class="primary-btn">Send Guidance</button>
-                    <button id="clear-input-btn" class="secondary-btn" style="display: none;">Clear Active Guidance</button>
-                </div>
-            </div>
-            <div id="active-input-display" style="display: none; margin-top: 12px; padding: 12px; background: #e8f5e9; border-left: 4px solid #28a745; border-radius: 4px;">
-                <div style="font-size: 0.85em; color: #28a745; font-weight: bold; margin-bottom: 4px;">ACTIVE GUIDANCE</div>
-                <div id="active-input-text" style="color: #333;"></div>
-                <div id="active-input-time" style="font-size: 0.8em; color: #666; margin-top: 4px;"></div>
-            </div>
-        </section>
+        </div>
 
         <!-- Database Management Section -->
         <section class="database-debug">
@@ -765,7 +763,7 @@
                 const response = await fetch(API.positions + '?status=open');
                 const positions = await response.json();
 
-                const section = document.getElementById('positions-section');
+                const section = document.getElementById('sidebar-positions');
                 const list = document.getElementById('positions-list');
 
                 if (positions.length === 0) {
