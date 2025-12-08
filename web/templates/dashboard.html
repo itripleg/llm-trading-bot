@@ -1264,7 +1264,8 @@
                 updateStatus(),
                 updateDecisions(),
                 updatePositions(),
-                updateActivity()
+                updateActivity(),
+                loadDatabaseOverview()
             ]);
 
             document.getElementById('last-update').textContent = new Date().toLocaleTimeString('en-US', {
