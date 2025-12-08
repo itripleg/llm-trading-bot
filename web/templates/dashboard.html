@@ -673,7 +673,11 @@
         async function updateDecisions() {
             try {
                 const response = await fetch(API.decisions + '?limit=50');
-                const newDecisions = await response.json();
+                const data = await response.json();
+
+                // Handle new API format (returns object with decisions array and total_count)
+                const newDecisions = data.decisions || data; // Fallback to array if old format
+                const totalCount = data.total_count || newDecisions.length;
 
                 // Only update if there's actually new data
                 const hasNewData = JSON.stringify(newDecisions) !== JSON.stringify(allDecisions);
@@ -686,8 +690,8 @@
                 allDecisions = newDecisions;
 
                 if (allDecisions.length > 0) {
-                    // Update total decisions count
-                    document.getElementById('total-decisions').textContent = allDecisions.length;
+                    // Update total decisions count (show actual total, not just fetched)
+                    document.getElementById('total-decisions').textContent = totalCount;
 
                     // Show navigation controls if there are multiple decisions
                     const navControls = document.getElementById('decision-nav');

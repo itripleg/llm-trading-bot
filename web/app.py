@@ -72,9 +72,39 @@ def api_account():
     """
     Get current account state.
 
+    For LIVE mode: Queries Hyperliquid API directly for real-time data
+    For PAPER mode: Uses latest database snapshot
+
     Returns:
         JSON with balance, equity, PnL, positions count
     """
+    # If live trading, get real-time data from Hyperliquid
+    if settings.is_live_trading():
+        try:
+            from trading.executor import HyperliquidExecutor
+            executor = HyperliquidExecutor(testnet=settings.hyperliquid_testnet)
+            live_state = executor.get_account_state()
+
+            if live_state:
+                # Get realized PnL from database (Hyperliquid doesn't track this)
+                db_account = get_latest_account_state()
+                realized_pnl = db_account.get('realized_pnl', 0.0) if db_account else 0.0
+
+                return jsonify({
+                    'balance_usd': live_state.get('account_value', 0.0),
+                    'equity_usd': live_state.get('account_value', 0.0),
+                    'unrealized_pnl': live_state.get('unrealized_pnl', 0.0),
+                    'realized_pnl': realized_pnl,
+                    'total_pnl': live_state.get('unrealized_pnl', 0.0) + realized_pnl,
+                    'num_positions': len(live_state.get('positions', [])),
+                    'timestamp': live_state.get('timestamp'),
+                    'source': 'hyperliquid_live'
+                })
+        except Exception as e:
+            print(f"[ERROR] Failed to fetch live Hyperliquid data: {e}")
+            # Fall back to database
+
+    # Paper mode or live mode fallback: use database
     account = get_latest_account_state()
 
     if not account:
@@ -87,9 +117,11 @@ def api_account():
             'total_pnl': 0.0,
             'sharpe_ratio': None,
             'num_positions': 0,
-            'timestamp': None
+            'timestamp': None,
+            'source': 'database'
         })
 
+    account['source'] = 'database'
     return jsonify(account)
 
 
@@ -120,7 +152,7 @@ def api_decisions():
         coin (str): Filter by specific coin (optional)
 
     Returns:
-        JSON array of trading decisions
+        JSON with decisions array and total_count
     """
     limit = request.args.get('limit', default=20, type=int)
     coin = request.args.get('coin', default=None, type=str)
@@ -130,13 +162,29 @@ def api_decisions():
     else:
         decisions = get_recent_decisions(limit=limit)
 
-    return jsonify(decisions)
+    # Get total count from database
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        if coin:
+            cursor.execute("SELECT COUNT(*) FROM decisions WHERE coin = ?", (coin,))
+        else:
+            cursor.execute("SELECT COUNT(*) FROM decisions")
+        total_count = cursor.fetchone()[0]
+
+    return jsonify({
+        'decisions': decisions,
+        'total_count': total_count,
+        'returned_count': len(decisions)
+    })
 
 
 @app.route('/api/positions')
 def api_positions():
     """
     Get positions.
+
+    For LIVE mode with status='open': Queries Hyperliquid API for real-time positions
+    Otherwise: Uses database
 
     Query params:
         status (str): 'open', 'closed', or 'all' (default: 'all')
@@ -147,6 +195,42 @@ def api_positions():
     """
     status = request.args.get('status', default='all', type=str)
     limit = request.args.get('limit', default=50, type=int)
+
+    # If live trading and requesting open positions, get real-time data
+    if settings.is_live_trading() and status == 'open':
+        try:
+            from trading.executor import HyperliquidExecutor
+            executor = HyperliquidExecutor(testnet=settings.hyperliquid_testnet)
+            live_state = executor.get_account_state()
+
+            if live_state and 'positions' in live_state:
+                # Convert Hyperliquid positions to our format
+                # Hyperliquid returns assetPositions with nested 'position' objects
+                positions = []
+                for asset_pos in live_state['positions']:
+                    if 'position' in asset_pos:
+                        pos = asset_pos['position']
+                        size = float(pos.get('szi', 0))
+                        entry_px = float(pos.get('entryPx', 0))
+                        leverage_obj = pos.get('leverage', {})
+                        leverage = float(leverage_obj.get('value', 1)) if isinstance(leverage_obj, dict) else float(leverage_obj)
+
+                        positions.append({
+                            'coin': pos.get('coin'),
+                            'side': 'long' if size > 0 else 'short',
+                            'entry_price': entry_px,
+                            'quantity_usd': abs(size) * entry_px,  # Approximate position value
+                            'leverage': leverage,
+                            'unrealized_pnl': float(pos.get('unrealizedPnl', 0)),
+                            'status': 'open',
+                            'source': 'hyperliquid_live'
+                        })
+                return jsonify(positions)
+        except Exception as e:
+            print(f"[ERROR] Failed to fetch live positions: {e}")
+            import traceback
+            traceback.print_exc()
+            # Fall back to database
 
     if status == 'open':
         positions = get_open_positions()
