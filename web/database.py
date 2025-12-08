@@ -154,6 +154,17 @@ def init_database():
             )
         """)
 
+        # User inputs table - store user guidance/comments
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_inputs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                message TEXT NOT NULL,
+                is_active INTEGER DEFAULT 1,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         # Create indices for common queries
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_decisions_timestamp
@@ -497,6 +508,53 @@ def get_bot_status_history(limit: int = 50) -> List[Dict[str, Any]]:
 
 
 # ============================================================================
+# USER INPUT OPERATIONS
+# ============================================================================
+
+def save_user_input(message: str) -> int:
+    """
+    Save a new user input message.
+    Automatically archives previous active messages (sets is_active=0).
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        timestamp = datetime.utcnow().isoformat()
+
+        # Archive previous active messages
+        cursor.execute("UPDATE user_inputs SET is_active = 0 WHERE is_active = 1")
+
+        # Insert new message
+        cursor.execute("""
+            INSERT INTO user_inputs (timestamp, message, is_active)
+            VALUES (?, ?, 1)
+        """, (timestamp, message))
+
+        return cursor.lastrowid
+
+
+def get_active_user_input() -> Optional[Dict[str, Any]]:
+    """Get the currently active user input message."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM user_inputs
+            WHERE is_active = 1
+            ORDER BY timestamp DESC
+            LIMIT 1
+        """)
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def archive_user_input(input_id: int) -> bool:
+    """Archive a specific user input (mark as inactive)."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE user_inputs SET is_active = 0 WHERE id = ?", (input_id,))
+        return cursor.rowcount > 0
+
+
+# ============================================================================
 # TESTING
 # ============================================================================
 
@@ -571,3 +629,124 @@ if __name__ == "__main__":
         print(f"  {p['position_id']} | {p['coin']} | {p['side']} | Entry: ${p['entry_price']}")
 
     print("\n[OK] All database tests passed!")
+
+
+# ============================================================================
+# DATABASE MANAGEMENT UTILITIES
+# ============================================================================
+
+def get_database_status() -> Dict[str, Any]:
+    """
+    Get current database statistics and status.
+    
+    Returns:
+        Dictionary with database stats including table counts and file size
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        
+        # Get counts from each table
+        cursor.execute("SELECT COUNT(*) FROM decisions")
+        decisions_count = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM account_state")
+        account_state_count = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM positions")
+        positions_count = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM positions WHERE status = 'open'")
+        open_positions_count = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM bot_status")
+        bot_status_count = cursor.fetchone()[0]
+        
+        # Get latest timestamps
+        cursor.execute("SELECT timestamp FROM decisions ORDER BY id DESC LIMIT 1")
+        latest_decision = cursor.fetchone()
+        latest_decision_time = latest_decision[0] if latest_decision else None
+        
+        cursor.execute("SELECT timestamp FROM account_state ORDER BY id DESC LIMIT 1")
+        latest_account = cursor.fetchone()
+        latest_account_time = latest_account[0] if latest_account else None
+    
+    # Get database file size
+    db_size_bytes = DB_PATH.stat().st_size if DB_PATH.exists() else 0
+    db_size_mb = db_size_bytes / (1024 * 1024)
+    
+    return {
+        'database_path': str(DB_PATH),
+        'database_size_mb': round(db_size_mb, 2),
+        'database_size_bytes': db_size_bytes,
+        'table_counts': {
+            'decisions': decisions_count,
+            'account_state': account_state_count,
+            'positions': positions_count,
+            'open_positions': open_positions_count,
+            'bot_status': bot_status_count
+        },
+        'latest_timestamps': {
+            'decision': latest_decision_time,
+            'account_state': latest_account_time
+        },
+        'last_updated': datetime.utcnow().isoformat()
+    }
+
+
+def reset_database(preserve_schema: bool = True) -> bool:
+    """
+    Reset the database by deleting all data.
+    
+    Args:
+        preserve_schema: If True, keep tables and just delete data
+                        If False, drop all tables and reinitialize
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            if preserve_schema:
+                # Just delete all data, keep schema
+                cursor.execute("DELETE FROM decisions")
+                cursor.execute("DELETE FROM account_state")
+                cursor.execute("DELETE FROM positions")
+                cursor.execute("DELETE FROM positions")
+                cursor.execute("DELETE FROM bot_status")
+                cursor.execute("DELETE FROM user_inputs")
+                
+                # Reset autoincrement counters
+                cursor.execute("DELETE FROM sqlite_sequence WHERE name='decisions'")
+                cursor.execute("DELETE FROM sqlite_sequence WHERE name='account_state'")
+                cursor.execute("DELETE FROM sqlite_sequence WHERE name='positions'")
+                cursor.execute("DELETE FROM sqlite_sequence WHERE name='positions'")
+                cursor.execute("DELETE FROM sqlite_sequence WHERE name='bot_status'")
+                cursor.execute("DELETE FROM sqlite_sequence WHERE name='user_inputs'")
+                
+                print(f"[OK] Database data cleared: {DB_PATH}")
+            else:
+                # Drop all tables and reinitialize
+                cursor.execute("DROP TABLE IF EXISTS decisions")
+                cursor.execute("DROP TABLE IF EXISTS account_state")
+                cursor.execute("DROP TABLE IF EXISTS positions")
+                cursor.execute("DROP TABLE IF EXISTS positions")
+                cursor.execute("DROP TABLE IF EXISTS bot_status")
+                cursor.execute("DROP TABLE IF EXISTS user_inputs")
+                cursor.execute("DROP TABLE IF EXISTS sqlite_sequence")
+                
+                print(f"[OK] Database tables dropped: {DB_PATH}")
+                
+        # Reinitialize schema if we dropped tables
+        if not preserve_schema:
+            init_database()
+            print(f"[OK] Database schema reinitialized")
+        
+        return True
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to reset database: {e}")
+        import traceback
+        traceback.print_exc()
+        return False

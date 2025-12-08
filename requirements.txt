@@ -29,6 +29,9 @@ flask-cors>=4.0.0
 # Logging & Monitoring
 coloredlogs>=15.0
 
+# Caching
+redis>=7.0.0
+
 # Testing
 pytest>=7.0.0
 pytest-cov>=4.0.0

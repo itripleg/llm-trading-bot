@@ -87,6 +87,10 @@ class Settings(BaseSettings):
         default="BTC/USD:USD,ETH/USD:USD,SOL/USD:USD",
         description="Comma-separated list of trading pairs"
     )
+    active_trading_assets: str = Field(
+        default="",
+        description="Comma-separated list of assets to actively analyze each cycle (leave empty to analyze ALL trading_assets)"
+    )
 
     # ===== LOGGING CONFIGURATION =====
     log_level: str = Field(
@@ -162,6 +166,19 @@ class Settings(BaseSettings):
         if isinstance(self.trading_assets, str):
             return [asset.strip() for asset in self.trading_assets.split(",")]
         return self.trading_assets
+
+    def get_active_trading_assets(self) -> list[str]:
+        """
+        Get list of assets to actively analyze each cycle.
+
+        Returns:
+            - If active_trading_assets is set: only those assets
+            - If empty: all trading_assets
+        """
+        if self.active_trading_assets and self.active_trading_assets.strip():
+            return [asset.strip() for asset in self.active_trading_assets.split(",")]
+        # Default to all trading assets if not specified
+        return self.get_trading_assets()
 
     def is_live_trading(self) -> bool:
         """Check if in live trading mode."""

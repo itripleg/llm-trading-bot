@@ -37,6 +37,12 @@ class MarketDataFetcher:
                 "enableRateLimit": True,
                 "options": {
                     "defaultType": "swap",  # Hyperliquid perpetuals (swaps)
+                    # Skip HIP-3 spot markets since we're only trading perps
+                    # This avoids the "Too many DEXes" error during market loading
+                    "fetchMarkets": {
+                        "types": ["swap"],  # Only load perpetual markets
+                        "hip3": False  # Disable HIP-3 spot market aggregation
+                    }
                 }
             }
 

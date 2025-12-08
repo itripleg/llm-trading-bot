@@ -116,6 +116,26 @@
             <div id="closed-positions-list"></div>
         </section>
 
+        <!-- Supervisor Input Section -->
+        <section class="supervisor-input">
+            <div class="section-header">
+                <h2>Supervisor Input</h2>
+                <span class="status-indicator" id="input-status-indicator" style="display: none;">Active</span>
+            </div>
+            <div class="input-container">
+                <textarea id="supervisor-message" placeholder="Enter guidance for the bot (e.g., 'Focus on shorting ETH', 'Be more aggressive', 'Market is choppy, reduce size')..." rows="3"></textarea>
+                <div class="input-actions">
+                    <button id="send-input-btn" class="primary-btn">Send Guidance</button>
+                    <button id="clear-input-btn" class="secondary-btn" style="display: none;">Clear Active Guidance</button>
+                </div>
+            </div>
+            <div id="active-input-display" style="display: none; margin-top: 12px; padding: 12px; background: #e8f5e9; border-left: 4px solid #28a745; border-radius: 4px;">
+                <div style="font-size: 0.85em; color: #28a745; font-weight: bold; margin-bottom: 4px;">ACTIVE GUIDANCE</div>
+                <div id="active-input-text" style="color: #333;"></div>
+                <div id="active-input-time" style="font-size: 0.8em; color: #666; margin-top: 4px;"></div>
+            </div>
+        </section>
+
         <!-- Database Management Section -->
         <section class="database-debug">
             <div class="section-header">
@@ -1074,6 +1094,87 @@
 
         // Reload debug data when table selection changes
         document.getElementById('debug-table-select').addEventListener('change', loadDebugData);
+
+        // --- Supervisor Input Logic ---
+        
+        async function loadActiveInput() {
+            try {
+                const response = await fetch('/api/user_input');
+                const data = await response.json();
+                
+                const display = document.getElementById('active-input-display');
+                const text = document.getElementById('active-input-text');
+                const time = document.getElementById('active-input-time');
+                const clearBtn = document.getElementById('clear-input-btn');
+                const indicator = document.getElementById('input-status-indicator');
+                
+                if (data.message) {
+                    display.style.display = 'block';
+                    text.textContent = data.message;
+                    time.textContent = 'Set: ' + new Date(data.timestamp).toLocaleString();
+                    clearBtn.style.display = 'inline-block';
+                    indicator.style.display = 'inline-block';
+                    indicator.textContent = 'Active Guidance';
+                    indicator.className = 'status-indicator running'; // Green
+                } else {
+                    display.style.display = 'none';
+                    clearBtn.style.display = 'none';
+                    indicator.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Error loading active input:', error);
+            }
+        }
+        
+        async function sendInput() {
+            const textarea = document.getElementById('supervisor-message');
+            const message = textarea.value.trim();
+            
+            if (!message) return;
+            
+            try {
+                const response = await fetch('/api/user_input', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    textarea.value = '';
+                    loadActiveInput();
+                } else {
+                    alert('Failed to send input: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error sending input:', error);
+                alert('Error sending input');
+            }
+        }
+        
+        async function clearInput() {
+            if (!confirm('Clear the active guidance?')) return;
+            
+            try {
+                const response = await fetch('/api/user_input', { method: 'DELETE' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    loadActiveInput();
+                }
+            } catch (error) {
+                console.error('Error clearing input:', error);
+            }
+        }
+        
+        document.getElementById('send-input-btn').addEventListener('click', sendInput);
+        document.getElementById('clear-input-btn').addEventListener('click', clearInput);
+        
+        // Load input on start and refresh
+        loadActiveInput();
+        setInterval(loadActiveInput, 10000); // Check every 10s
+
     </script>
 </body>
 </html>

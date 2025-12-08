@@ -31,7 +31,12 @@ from web.database import (
     get_latest_bot_status,
     get_bot_status_history,
     set_database_path,
-    get_db_connection
+    get_db_connection,
+    get_database_status,
+    reset_database,
+    save_user_input,
+    get_active_user_input,
+    archive_user_input
 )
 from config.settings import settings
 
@@ -434,6 +439,103 @@ def api_bot_stop():
 
 
 # ============================================================================
+# DATABASE MANAGEMENT ROUTES
+# ============================================================================
+
+@app.route('/api/user_input', methods=['GET', 'POST', 'DELETE'])
+def api_user_input():
+    """Get active user input, save new input, or clear input."""
+    if request.method == 'GET':
+        active_input = get_active_user_input()
+        return jsonify(active_input if active_input else {})
+
+    elif request.method == 'POST':
+        data = request.json
+        message = data.get('message')
+        
+        if not message:
+            return jsonify({'error': 'Message is required'}), 400
+            
+        input_id = save_user_input(message)
+        return jsonify({
+            'success': True,
+            'id': input_id,
+            'message': 'User input saved'
+        })
+
+    elif request.method == 'DELETE':
+        # Archive current active input if exists
+        active_input = get_active_user_input()
+        if active_input:
+            archive_user_input(active_input['id'])
+            return jsonify({'success': True, 'message': 'User input cleared'})
+        return jsonify({'success': True, 'message': 'No active input to clear'})
+
+
+@app.route('/api/database/status')
+def api_database_status():
+    """
+    Get database statistics and status.
+
+    Returns:
+        JSON with database info including:
+        - Table counts (decisions, positions, account_state, bot_status)
+        - Database file size
+        - Latest timestamps
+        - Database path
+    """
+    try:
+        status = get_database_status()
+        return jsonify(status)
+    except Exception as e:
+        return jsonify({
+            'error': f'Failed to get database status: {str(e)}'
+        }), 500
+
+
+@app.route('/api/database/reset', methods=['POST'])
+def api_database_reset():
+    """
+    Reset (clear) the database.
+    
+    Query params:
+        preserve_schema (bool): If true, keep tables and delete data only
+                               If false, drop and recreate tables
+                               Default: true
+
+    Returns:
+        JSON with success status and new database status
+    """
+    try:
+        # Get preserve_schema parameter (default: True)
+        preserve_schema = request.args.get('preserve_schema', 'true').lower() == 'true'
+        
+        # Perform the reset
+        success = reset_database(preserve_schema=preserve_schema)
+        
+        if not success:
+            return jsonify({
+                'success': False,
+                'message': 'Failed to reset database - check server logs'
+            }), 500
+        
+        # Get new status after reset
+        new_status = get_database_status()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Database reset successfully',
+            'database_status': new_status
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Failed to reset database: {str(e)}'
+        }), 500
+
+
+# ============================================================================
 # ERROR HANDLERS
 # ============================================================================
 
@@ -458,12 +560,14 @@ if __name__ == '__main__':
     print("\nStarting Flask server...")
     print("Dashboard URL: http://localhost:5000")
     print("\nAvailable API endpoints:")
-    print("  GET /api/account          - Current account state")
-    print("  GET /api/account/history  - Account history")
-    print("  GET /api/decisions        - Recent trading decisions")
-    print("  GET /api/positions        - Position history")
-    print("  GET /api/status           - Bot status")
-    print("  GET /api/stats            - Summary statistics")
+    print("  GET /api/account             - Current account state")
+    print("  GET /api/account/history     - Account history")
+    print("  GET /api/decisions           - Recent trading decisions")
+    print("  GET /api/positions           - Position history")
+    print("  GET /api/status              - Bot status")
+    print("  GET /api/stats               - Summary statistics")
+    print("  GET /api/database/status     - Database statistics")
+    print("  POST /api/database/reset     - Reset database (clear all data)")
     print("\nPress Ctrl+C to stop")
     print("="*60)
 
