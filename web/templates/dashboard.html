@@ -134,69 +134,148 @@
             </div>
         </div>
 
-        <!-- Database Management Section -->
+        <!-- Database Management Section (Redesigned) -->
         <section class="database-debug">
             <div class="section-header">
-                <h2>Database Management</h2>
-                <span class="activity-subtitle">Manage local SQLite database</span>
+                <h2>Database Explorer</h2>
+                <span class="activity-subtitle">View trading history and manage local data</span>
             </div>
 
-            <!-- Database status display -->
-            <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 16px; margin-bottom: 16px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <h3 style="margin: 0; font-size: 1rem;">Database Status</h3>
-                    <button onclick="loadDatabaseStatus()" style="padding: 6px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.875rem;">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="vertical-align: middle; margin-right: 4px;">
-                            <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
-                            <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
-                        </svg>
-                        Refresh
-                    </button>
+            <div class="database-container">
+                <!-- Tabs -->
+                <div class="db-tabs">
+                    <button class="db-tab active" onclick="switchDbTab('overview')">Overview</button>
+                    <button class="db-tab" onclick="switchDbTab('decisions')">Decisions</button>
+                    <button class="db-tab" onclick="switchDbTab('positions')">All Positions</button>
+                    <button class="db-tab" onclick="switchDbTab('account')">Account History</button>
+                    <button class="db-tab" onclick="switchDbTab('manage')">Manage</button>
                 </div>
-                
-                <div id="database-status-display" style="font-size: 0.875rem; color: #495057;">
-                    <div style="color: #6c757d;">Loading database status...</div>
+
+                <!-- Overview Tab -->
+                <div class="db-tab-content active" id="db-tab-overview">
+                    <div class="db-stats-grid" id="db-stats-grid">
+                        <div class="db-stat-card">
+                            <div class="db-stat-label">Total Decisions</div>
+                            <div class="db-stat-value" id="stat-decisions">-</div>
+                            <div class="db-stat-sublabel">All time</div>
+                        </div>
+                        <div class="db-stat-card">
+                            <div class="db-stat-label">Total Positions</div>
+                            <div class="db-stat-value" id="stat-positions">-</div>
+                            <div class="db-stat-sublabel">Opened & closed</div>
+                        </div>
+                        <div class="db-stat-card">
+                            <div class="db-stat-label">Open Positions</div>
+                            <div class="db-stat-value" id="stat-open-positions">-</div>
+                            <div class="db-stat-sublabel">Currently active</div>
+                        </div>
+                        <div class="db-stat-card">
+                            <div class="db-stat-label">Database Size</div>
+                            <div class="db-stat-value" id="stat-db-size">-</div>
+                            <div class="db-stat-sublabel">MB</div>
+                        </div>
+                    </div>
+
+                    <div style="padding: var(--spacing-md); background: var(--bg-tertiary); border-radius: var(--radius-md); border: 1px solid var(--border-primary);">
+                        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: var(--spacing-sm);">
+                            <strong>Database Path:</strong>
+                        </div>
+                        <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted); word-break: break-all;" id="stat-db-path">
+                            Loading...
+                        </div>
+                    </div>
                 </div>
-            </div>
 
-            <!-- Database actions -->
-            <div style="display: flex; gap: 12px;">
-                <button onclick="resetDatabase()" style="padding: 8px 20px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="vertical-align: middle; margin-right: 6px;">
-                        <path fill-rule="evenodd" d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2v1z"/>
-                        <path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466z"/>
-                    </svg>
-                    Reset Database
-                </button>
-                <div style="flex: 1; display: flex; align-items: center; padding-left: 12px; color: #6c757d; font-size: 0.875rem;">
-                    ⚠️ This will clear all local data (decisions, positions, account state)
+                <!-- Decisions Tab -->
+                <div class="db-tab-content" id="db-tab-decisions">
+                    <div class="data-table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Coin</th>
+                                    <th>Signal</th>
+                                    <th>Size</th>
+                                    <th>Leverage</th>
+                                    <th>Confidence</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="decisions-table-body">
+                                <tr><td colspan="7" style="text-align: center; padding: var(--spacing-xl); color: var(--text-muted);">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </div>
-        </section>
 
-        <!-- Database Debug Section -->
+                <!-- Positions Tab -->
+                <div class="db-tab-content" id="db-tab-positions">
+                    <div class="data-table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Entry Time</th>
+                                    <th>Coin</th>
+                                    <th>Side</th>
+                                    <th>Entry Price</th>
+                                    <th>Size (USD)</th>
+                                    <th>Leverage</th>
+                                    <th>Exit Price</th>
+                                    <th>Realized P&L</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="positions-table-body">
+                                <tr><td colspan="9" style="text-align: center; padding: var(--spacing-xl); color: var(--text-muted);">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
 
-        <section class="database-debug">
-            <div class="section-header">
-                <h2>Database Debug</h2>
-                <span class="activity-subtitle">Raw database entries for inspection</span>
-            </div>
+                <!-- Account History Tab -->
+                <div class="db-tab-content" id="db-tab-account">
+                    <div class="data-table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Balance</th>
+                                    <th>Equity</th>
+                                    <th>Unrealized P&L</th>
+                                    <th>Realized P&L</th>
+                                    <th>Total P&L</th>
+                                    <th>Open Positions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="account-table-body">
+                                <tr><td colspan="7" style="text-align: center; padding: var(--spacing-xl); color: var(--text-muted);">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
 
-            <!-- Table selector -->
-            <div style="margin-bottom: 16px;">
-                <label for="debug-table-select" style="margin-right: 8px; font-weight: 500;">Table:</label>
-                <select id="debug-table-select" style="padding: 6px 12px; border: 1px solid #ced4da; border-radius: 4px;">
-                    <option value="decisions">Decisions</option>
-                    <option value="account_state">Account State</option>
-                    <option value="positions">Positions</option>
-                    <option value="bot_status">Bot Status</option>
-                </select>
-                <button onclick="loadDebugData()" style="margin-left: 8px; padding: 6px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Reload</button>
-            </div>
+                <!-- Manage Tab -->
+                <div class="db-tab-content" id="db-tab-manage">
+                    <div style="margin-bottom: var(--spacing-lg);">
+                        <h3 style="font-size: 1rem; margin-bottom: var(--spacing-sm); color: var(--text-primary);">Database Actions</h3>
+                        <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: var(--spacing-md);">
+                            Manage your local SQLite database. Use these actions to reset data or start fresh.
+                        </p>
+                    </div>
 
-            <!-- Database entries display -->
-            <div id="debug-entries" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 16px; max-height: 600px; overflow-y: auto;">
-                <div style="color: #6c757d;">Loading...</div>
+                    <div class="db-actions">
+                        <button class="db-action-btn danger" onclick="resetDatabase()">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <path fill-rule="evenodd" d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2v1z"/>
+                                <path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466z"/>
+                            </svg>
+                            Clear All Data
+                        </button>
+                        <div class="db-action-warning">
+                            ⚠️ This will permanently delete all decisions, positions, and account history. This action cannot be undone.
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
     </div>
@@ -917,7 +996,154 @@
             }
         }
 
-        // Load database status
+        // =====================================================================
+        // DATABASE EXPLORER TAB FUNCTIONS
+        // =====================================================================
+
+        // Tab switching
+        function switchDbTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.db-tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.db-tab-content').forEach(content => content.classList.remove('active'));
+
+            // Show selected tab
+            document.querySelector(`.db-tab[onclick*="${tabName}"]`).classList.add('active');
+            document.getElementById(`db-tab-${tabName}`).classList.add('active');
+
+            // Load data for tab (only load if not already loaded)
+            if (tabName === 'overview') loadDatabaseOverview();
+            if (tabName === 'decisions') loadDecisionsTable();
+            if (tabName === 'positions') loadPositionsTable();
+            if (tabName === 'account') loadAccountTable();
+        }
+
+        // Load database overview stats
+        async function loadDatabaseOverview() {
+            try {
+                const response = await fetch(API.database_status);
+                const status = await response.json();
+
+                document.getElementById('stat-decisions').textContent = status.table_counts?.decisions || 0;
+                document.getElementById('stat-positions').textContent = status.table_counts?.positions || 0;
+                document.getElementById('stat-open-positions').textContent = status.table_counts?.open_positions || 0;
+                document.getElementById('stat-db-size').textContent = (status.database_size_mb || 0).toFixed(2);
+                document.getElementById('stat-db-path').textContent = status.database_path || 'Unknown';
+            } catch (error) {
+                console.error('Failed to load database overview:', error);
+            }
+        }
+
+        // Load decisions table
+        async function loadDecisionsTable() {
+            try {
+                const response = await fetch(API.decisions + '?limit=100');
+                const data = await response.json();
+                const decisions = data.decisions || data;
+
+                const tbody = document.getElementById('decisions-table-body');
+                if (decisions.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: var(--spacing-xl); color: var(--text-muted);">No decisions found</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = decisions.map(d => {
+                    const time = new Date(d.timestamp).toLocaleString('en-US', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'});
+                    const statusBadge = d.execution_status === 'success' ? 'success' :
+                                      d.execution_status === 'failed' ? 'error' : 'pending';
+                    return `
+                        <tr>
+                            <td>${time}</td>
+                            <td>${d.coin}</td>
+                            <td><span class="decision-signal-badge ${d.signal}">${d.signal.replace('_', ' ')}</span></td>
+                            <td>$${d.quantity_usd?.toFixed(2) || '0.00'}</td>
+                            <td>${d.leverage?.toFixed(1) || '1.0'}x</td>
+                            <td>${((d.confidence || 0) * 100).toFixed(0)}%</td>
+                            <td><span class="data-badge ${statusBadge}">${d.execution_status || 'pending'}</span></td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Failed to load decisions:', error);
+                document.getElementById('decisions-table-body').innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--color-loss);">Error loading decisions</td></tr>';
+            }
+        }
+
+        // Load positions table
+        async function loadPositionsTable() {
+            try {
+                const response = await fetch(API.positions + '?status=all&limit=100');
+                const positions = await response.json();
+
+                const tbody = document.getElementById('positions-table-body');
+                if (positions.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: var(--spacing-xl); color: var(--text-muted);">No positions found</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = positions.map(p => {
+                    const entryTime = new Date(p.entry_time).toLocaleString('en-US', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'});
+                    const exitPrice = p.exit_price ? `$${p.exit_price.toFixed(2)}` : '-';
+                    const pnl = p.realized_pnl ? `$${p.realized_pnl.toFixed(2)}` : '-';
+                    const pnlClass = p.realized_pnl > 0 ? 'positive' : p.realized_pnl < 0 ? 'negative' : '';
+                    const statusBadge = p.status === 'open' ? 'pending' : 'success';
+
+                    return `
+                        <tr>
+                            <td>${entryTime}</td>
+                            <td>${p.coin}</td>
+                            <td><span class="badge ${p.side}">${p.side}</span></td>
+                            <td>$${p.entry_price?.toFixed(2) || '0.00'}</td>
+                            <td>$${p.quantity_usd?.toFixed(2) || '0.00'}</td>
+                            <td>${p.leverage?.toFixed(1) || '1.0'}x</td>
+                            <td>${exitPrice}</td>
+                            <td class="${pnlClass}">${pnl}</td>
+                            <td><span class="data-badge ${statusBadge}">${p.status}</span></td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Failed to load positions:', error);
+                document.getElementById('positions-table-body').innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--color-loss);">Error loading positions</td></tr>';
+            }
+        }
+
+        // Load account history table
+        async function loadAccountTable() {
+            try {
+                const response = await fetch(API.account_history + '?limit=50');
+                const history = await response.json();
+
+                const tbody = document.getElementById('account-table-body');
+                if (history.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: var(--spacing-xl); color: var(--text-muted);">No account history found</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = history.map(h => {
+                    const time = new Date(h.timestamp).toLocaleString('en-US', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'});
+                    const unrealizedClass = (h.unrealized_pnl || 0) > 0 ? 'positive' : (h.unrealized_pnl || 0) < 0 ? 'negative' : '';
+                    const realizedClass = (h.realized_pnl || 0) > 0 ? 'positive' : (h.realized_pnl || 0) < 0 ? 'negative' : '';
+                    const totalClass = (h.total_pnl || 0) > 0 ? 'positive' : (h.total_pnl || 0) < 0 ? 'negative' : '';
+
+                    return `
+                        <tr>
+                            <td>${time}</td>
+                            <td>$${h.balance_usd?.toFixed(2) || '0.00'}</td>
+                            <td>$${h.equity_usd?.toFixed(2) || '0.00'}</td>
+                            <td class="${unrealizedClass}">$${h.unrealized_pnl?.toFixed(2) || '0.00'}</td>
+                            <td class="${realizedClass}">$${h.realized_pnl?.toFixed(2) || '0.00'}</td>
+                            <td class="${totalClass}">$${h.total_pnl?.toFixed(2) || '0.00'}</td>
+                            <td>${h.num_positions || 0}</td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Failed to load account history:', error);
+                document.getElementById('account-table-body').innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--color-loss);">Error loading account history</td></tr>';
+            }
+        }
+
+        // Load database status (LEGACY - keeping for compatibility)
         async function loadDatabaseStatus() {
             const container = document.getElementById('database-status-display');
             
