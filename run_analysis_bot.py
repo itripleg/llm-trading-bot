@@ -16,6 +16,7 @@ import signal
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, Any
+import msvcrt  # Windows-specific key detection
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -36,12 +37,93 @@ from web.database import (
     update_decision_execution,
     save_position_entry,
     close_position,
-    get_open_positions
+    get_open_positions,
+    get_active_user_input
 )
 
 # Control file for start/stop
 CONTROL_FILE = Path(__file__).parent / "data" / "bot_control.txt"
 RUNNING = False
+
+# Global context for interactive queries
+LATEST_CONTEXT = {
+    'executor': None,
+    'account': None,
+    'is_live': False
+}
+
+def print_live_status():
+    """Fetch and display current status of active positions."""
+    print("\n" + "="*70)
+    print(f"LIVE STATUS CHECK - {datetime.now().strftime('%H:%M:%S')}")
+    print("="*70)
+    
+    executor = LATEST_CONTEXT.get('executor')
+    account = LATEST_CONTEXT.get('account')
+    is_live = LATEST_CONTEXT.get('is_live', False)
+    
+    if is_live and executor:
+        try:
+            # Re-use get_current_account_state which fetches live prices/positions
+            from data.fetcher import MarketDataFetcher
+            
+            # We need current prices for the summary calculation
+            # But get_current_account_state does a decent job for live mode 
+            # by querying the exchange directly
+            state = get_current_account_state(executor=executor, is_live=True)
+            
+            print(f"Balance: ${state['balance']:.2f}")
+            print(f"Equity:  ${state['equity']:.2f}")
+            print(f"PnL:     ${state['unrealized_pnl']:+.2f}")
+            
+            if state['positions']:
+                print("\nActive Positions:")
+                for pos in state['positions']:
+                    # Try to fetch fresh price if possible, otherwise use what we got
+                    print(f"  {pos['coin']:<15} {pos['side'].upper():<5} "
+                          f"${pos['quantity_usd']:>7.2f} "
+                          f"PnL: ${pos['unrealized_pnl']:>+7.2f}")
+            else:
+                print("\nNo active positions.")
+                
+        except Exception as e:
+            print(f"Error fetching live status: {e}")
+            
+    elif not is_live and account:
+        # Paper trading
+        print("PAPER TRADING MODE")
+        # For paper, we need to fetch current prices to show accurate PnL
+        fetcher = MarketDataFetcher()
+        current_prices = {}
+        
+        if account.positions:
+            print("\nFetching current prices...")
+            for coin in account.positions:
+                try:
+                    df = fetcher.fetch_ohlcv(coin, limit=1)
+                    if not df.empty:
+                        current_prices[coin] = df['close'].iloc[-1]
+                except:
+                    pass
+        
+        summary = account.get_summary(current_prices)
+        print(f"Balance: ${summary['balance']:.2f}")
+        print(f"Equity:  ${summary['equity']:.2f}")
+        print(f"PnL:     ${summary['unrealized_pnl']:+.2f}")
+        
+        if summary['positions']:
+            print("\nActive Positions:")
+            for pos in summary['positions']:
+                print(f"  {pos['coin']:<15} {pos['side'].upper():<5} "
+                      f"${pos['quantity_usd']:>7.2f} "
+                      f"PnL: ${pos['unrealized_pnl']:>+7.2f}")
+        else:
+            print("\nNo active positions.")
+    else:
+        print("Bot context not fully initialized yet.")
+    
+    print("="*70)
+    print("Resume waiting...", end="", flush=True)
 
 
 def read_control_state():
@@ -411,18 +493,23 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
             is_live=is_live
         )
 
-        # Get assets from settings
-        assets = [a.strip() for a in settings.trading_assets.split(',')]
+        # Update global context for interactive queries
+        global LATEST_CONTEXT
+        LATEST_CONTEXT['executor'] = executor
+        LATEST_CONTEXT['account'] = account
+        LATEST_CONTEXT['is_live'] = is_live
 
-        # Determine which coins to analyze: primary asset + any with open positions
-        coins_to_analyze = [assets[0]]  # Always analyze primary asset (BTC)
+        # Get assets to actively analyze from settings
+        # This respects ACTIVE_TRADING_ASSETS if set, otherwise uses all TRADING_ASSETS
+        coins_to_analyze = list(settings.get_active_trading_assets())
 
-        # Add any coins with open positions (e.g., if ETH position exists)
+        # Add any coins with open positions that aren't in the active list
+        # (We always need to analyze coins we have positions in)
         for pos in account_summary.get('positions', []):
             pos_coin = pos['coin']
             if pos_coin not in coins_to_analyze:
                 coins_to_analyze.append(pos_coin)
-                print(f"[INFO] Found open {pos_coin} position - will fetch market data", flush=True)
+                print(f"[INFO] Found open {pos_coin} position - adding to analysis list", flush=True)
 
         print(f"\n[1/4] Analyzing assets: {', '.join(coins_to_analyze)}", flush=True)
 
@@ -515,7 +602,7 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
                       f"PnL: ${pos['unrealized_pnl']:+.2f}", flush=True)
 
         # Pre-flight check: Skip analysis if balance is too low to trade
-        min_practical_balance = 20.0  # Minimum for Hyperliquid position sizes
+        min_practical_balance = 15 # Minimum for Hyperliquid position sizes
         if account_summary['balance'] < min_practical_balance and account_summary['num_positions'] == 0:
             print(f"\n[SKIP] Balance ${account_summary['balance']:.2f} below minimum ${min_practical_balance:.2f}", flush=True)
             print(f"       Cannot open new positions - skipping Claude analysis to save tokens", flush=True)
@@ -550,8 +637,19 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
         )
         prompt_builder = PromptBuilder(config=trading_config)
         
+        # Get active user guidance
+        active_input = get_active_user_input()
+        user_guidance = active_input['message'] if active_input else None
+        if user_guidance:
+            print(f"\n[GUIDANCE] Active Supervisor Input: \"{user_guidance}\"", flush=True)
+
         system_prompt = prompt_builder.get_system_prompt()
-        user_prompt = prompt_builder.build_trading_prompt(market_data, account_state, minutes_since_start)
+        user_prompt = prompt_builder.build_trading_prompt(
+            market_data, 
+            account_state, 
+            minutes_since_start,
+            user_guidance=user_guidance
+        )
 
         # Get Claude's decision
         print(f"\n[4/4] Getting Claude's analysis...", flush=True)
@@ -677,10 +775,11 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
 def run_bot():
     """Main bot loop - runs continuously until stopped."""
     global RUNNING
+    global LATEST_CONTEXT
 
     print("="*70, flush=True)
     mode = "LIVE TRADING" if settings.is_live_trading() else "PAPER TRADING"
-    print(f"ALPHA ARENA MINI - {mode} BOT", flush=True)
+    print(f"MOTHERBOT - {mode} BOT", flush=True)
     print("="*70, flush=True)
 
     if settings.is_live_trading():
@@ -692,14 +791,16 @@ def run_bot():
 
     print("\nControls:", flush=True)
     print("  - Dashboard: http://localhost:5000", flush=True)
-    print("  - Ctrl+C: Stop the bot", flush=True)
-    print("  - Control file:", CONTROL_FILE, flush=True)
-    print("\n" + "="*70, flush=True)
-
+    print("  - [p]rice: Check live PnL", flush=True)
+    print("  - [q]uit or Ctrl+C: Stop the bot", flush=True)
+    
     # Set database path based on mode (separate DBs for paper vs live)
     db_mode = "live" if settings.is_live_trading() else "paper"
     set_database_path(db_mode)
-    print(f"\nUsing database: trading_bot_{db_mode}.db", flush=True)
+    print(f"  - Database: trading_bot_{db_mode}.db", flush=True)
+    print("="*70, flush=True)
+
+
 
     # Initialize components based on mode
     executor = None
@@ -710,26 +811,48 @@ def run_bot():
         print("\nInitializing Hyperliquid executor...", flush=True)
         try:
             executor = HyperliquidExecutor(testnet=settings.hyperliquid_testnet)
-
-            # Get and display real account balance
-            live_state = executor.get_account_state()
-            balance = live_state.get('account_value', 0)
+            
+            # Use unifying wrapper to get state
+            state = get_current_account_state(executor=executor, is_live=True)
+            
             print(f"Executor initialized successfully!", flush=True)
-            print(f"Live account balance: ${balance:.2f}", flush=True)
+            print(f"Balance: ${state['balance']:.2f}")
+            print(f"Equity:  ${state['equity']:.2f}")
+            
+            if state['positions']:
+                print("\nActive Positions:", flush=True)
+                for pos in state['positions']:
+                    print(f"  {pos['coin']:<15} {pos['side'].upper():<5} "
+                          f"${pos['quantity_usd']:>7.2f} "
+                          f"PnL: ${pos['unrealized_pnl']:>+7.2f}", flush=True)
+            else:
+                 print("No active positions.", flush=True)
 
-            # Create dummy TradingAccount for internal use (not used for balance tracking)
+            # Create dummy TradingAccount for internal use
             account = TradingAccount(initial_balance=1000.0)
+            
+            LATEST_CONTEXT['executor'] = executor
+            LATEST_CONTEXT['account'] = account
+            LATEST_CONTEXT['is_live'] = True
+            
         except Exception as e:
             print(f"[ERROR] Failed to initialize executor: {e}", flush=True)
             print("Make sure HYPERLIQUID_WALLET_PRIVATE_KEY is set in .env", flush=True)
             return
-        print("="*70, flush=True)
     else:
         # PAPER MODE: Initialize simulated trading account
         print("\nInitializing paper trading account...", flush=True)
         account = TradingAccount(initial_balance=1000.0)
-        print(f"Account state: {account}", flush=True)
-        print("="*70, flush=True)
+        print(f"Balance: ${account.balance:.2f}", flush=True)
+        
+        # Initialize global context immediately
+        # global LATEST_CONTEXT # Already declared above if in same function scope? No, needs to be valid python.
+
+        LATEST_CONTEXT['executor'] = None 
+        LATEST_CONTEXT['account'] = account
+        LATEST_CONTEXT['is_live'] = False
+        
+    print("="*70, flush=True)
 
     # Set up signal handler
     signal.signal(signal.SIGINT, signal_handler)
@@ -775,32 +898,43 @@ def run_bot():
             # Wait 2-3 minutes before next cycle
             wait_time = 150  # 2.5 minutes
             next_cycle_time = datetime.now() + timedelta(seconds=wait_time)
+            # Sleep with key check
+            # Check every 0.1s
+            check_interval = 0.1
+            steps = int(wait_time / check_interval)
+            
             print(f"\n[*] Waiting {wait_time} seconds until next cycle...", flush=True)
             print(f"    Next cycle at: {next_cycle_time.strftime('%H:%M:%S')}", flush=True)
-            print(f"    Press Ctrl+C to stop", flush=True)
+            print(f"    Commands: [p]rice check, [q]uit", flush=True)
 
-            # Sleep in small chunks so we can respond to stop quickly
-            # Show countdown every 30 seconds
-            for i in range(wait_time):
-                try:
-                    # Check control state with error handling
-                    state = read_control_state()
-                    if state != "running":
-                        print(f"[!] Bot state changed to: {state}", flush=True)
-                        break
-
-                    # Show progress every 30 seconds
-                    if i > 0 and i % 30 == 0:
-                        remaining = wait_time - i
-                        print(f"    [{remaining}s remaining...]", flush=True)
-
-                    time.sleep(1)
-                except Exception as e:
-                    # Log any errors but continue waiting
-                    print(f"[WARNING] Error during wait: {e}", flush=True)
-                    time.sleep(1)
-                    continue
-
+            for i in range(steps):
+                # Check for keypress
+                if msvcrt.kbhit():
+                    key = msvcrt.getch().lower()
+                    if key == b'p':
+                        print_live_status()
+                    elif key == b'q':
+                        print("\n[USER] Quit command received", flush=True)
+                        raise KeyboardInterrupt
+                
+                # Update countdown display every 30 seconds
+                current_time = i * check_interval
+                if i > 0 and int(current_time) % 30 == 0 and abs(current_time - round(current_time)) < 0.01:
+                     remaining = wait_time - int(current_time)
+                     print(f"    [{remaining}s remaining...]", flush=True)
+                
+                # Check control file every 1 second
+                if i % 10 == 0:
+                    try:
+                        state = read_control_state()
+                        if state != "running":
+                            print(f"[!] Bot state changed to: {state}", flush=True)
+                            break
+                    except:
+                        pass
+                
+                time.sleep(check_interval)
+                
     except KeyboardInterrupt:
         print("\n\n[!] Bot stopped by user", flush=True)
     finally:
