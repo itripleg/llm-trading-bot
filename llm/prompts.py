@@ -14,7 +14,7 @@ class TradingConfig:
     exchange_name: str = "Hyperliquid"
     asset_class: str = "Perpetual Futures"
     min_position_size_usd: float = 10.0
-    max_leverage: float = 10.0
+    max_leverage: float = 20.0
     # The columns in the dataframe that should be highlighted in the prompt
     relevant_indicators: List[str] = field(default_factory=lambda: ['ema_20', 'macd', 'rsi_7', 'rsi_14', 'volume'])
 
@@ -53,13 +53,22 @@ Your goal is to maximize profit and loss (PnL) while managing risk appropriately
 5. Provide clear justification for every decision.
 
 ## Trade Conviction & Position Management
-- **High confidence (≥70%):** Hold tight to your exit plan.
-- **Medium confidence (50-69%):** Allow flexibility if thesis weakens.
-- **Low confidence (<50%):** Be highly responsive to changing conditions.
+- **High confidence (≥70%):** Aggressively target the move. Use higher leverage (5x-10x) to maximize returns on high-probability setups.
+- **Medium confidence (50-69%):** Standard sizing. Use moderate leverage (2x-4x).
+- **Low confidence (<50%):** Stay out or use minimal size/leverage.
+- **Diamond Hands:** Once in a trade, HOLD until the trend is clearly broken. Do NOT exit on small red candles or minor chop.
 - Only exit early if:
-  1. Invalidation condition is ACTUALLY triggered.
-  2. New information fundamentally changes your original thesis.
-  3. Profit target or stop loss is reached.
+  1. Market structure is BROKEN (e.g., lower low in an uptrend).
+  2. Hard stop loss is hit.
+  3. Profit target is hit.
+  4. You typically should NOT exit just because the price stalled for a few candles. Give the trade room to breathe.
+
+## Strategy Guidelines (Aggressive Trend Following)
+- **Aggression:** You are an aggressive trader. If the chart is bullish, you are LONG. If bearish, you are SHORT. Do not sit on the sidelines without a very good reason.
+- **Leverage:** Use 5x-10x leverage for high conviction setups. We are here to make money, not to play it safe.
+- **Sizing:** Deploy capital decisively. Do not "dip a toe". Enter with conviction.
+- **Risk:** The biggest risk is missing the pump. While we use stops, we accept volatility as the cost of doing business.
+- **Persistence:** If stopped out but the thesis remains valid (e.g., a wick fakeout), RE-ENTER immediately. Do not be afraid to be wrong, be afraid to stay out of a winning trend.
 
 ## Output Format
 Return valid JSON with these exact fields:
@@ -201,6 +210,7 @@ IMPORTANT: Data provided below is ordered OLDEST → NEWEST."""
         market_data: Dict[str, Dict],
         account_state: Dict[str, Any],
         minutes_since_start: int = 0,
+        user_guidance: Optional[str] = None,
     ) -> str:
         """
         Build the User Prompt (Context).
@@ -212,6 +222,16 @@ IMPORTANT: Data provided below is ordered OLDEST → NEWEST."""
         lines.append("Analyze the provided state data and predictive signals.")
         lines.append(f"REMINDER: Minimum order size is ${self.config.min_position_size_usd}.")
         lines.append("")
+        
+        # Supervisor Guidance (High Priority)
+        if user_guidance:
+            lines.append("!!! SUPERVISOR GUIDANCE (HIGH PRIORITY) !!!")
+            lines.append("The human supervisor has provided the following context/instruction:")
+            lines.append(f"> \"{user_guidance}\"")
+            lines.append("You MUST consider this input in your analysis and decision making.")
+            lines.append("If this guidance contradicts standard rules, prioritize this guidance (within safety limits).")
+            lines.append("")
+
         lines.append("---")
         lines.append("")
 

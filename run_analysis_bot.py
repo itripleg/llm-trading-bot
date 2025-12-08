@@ -18,6 +18,11 @@ from datetime import datetime, timedelta
 from typing import Dict, Any
 import msvcrt  # Windows-specific key detection
 
+def flush_input():
+    """Flush pending input from the buffer to prevent ghost commands."""
+    while msvcrt.kbhit():
+        msvcrt.getch()
+
 sys.path.insert(0, str(Path(__file__).parent))
 
 from data.fetcher import MarketDataFetcher
@@ -902,6 +907,9 @@ def run_bot():
             # Check every 0.1s
             check_interval = 0.1
             steps = int(wait_time / check_interval)
+            
+            # Flush any accidental keystrokes before waiting
+            flush_input()
             
             print(f"\n[*] Waiting {wait_time} seconds until next cycle...", flush=True)
             print(f"    Next cycle at: {next_cycle_time.strftime('%H:%M:%S')}", flush=True)
