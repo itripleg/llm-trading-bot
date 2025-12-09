@@ -1028,29 +1028,84 @@ section h2 {
     margin-bottom: 4px;
     border-radius: var(--radius-sm);
     display: flex;
-    gap: var(--spacing-sm);
-    align-items: baseline;
+    flex-direction: column;
+    gap: 4px;
     transition: background var(--transition-fast);
     font-size: 0.7rem;
 }
 
 .console-message:hover {
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(255, 255, 255, 0.05);
 }
 
+.console-message-main {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: baseline;
+}
+
+.console-message-details {
+    display: none;
+    padding-left: var(--spacing-md);
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.console-message:hover .console-message-details {
+    display: block;
+    opacity: 1;
+    animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Activity Log Action Colors */
+.console-message.action-buy {
+    border-left: 3px solid #22c55e; /* Green */
+}
+
+.console-message.action-sell {
+    border-left: 3px solid #ef4444; /* Red */
+}
+
+.console-message.action-hold {
+    border-left: 3px solid #eab308; /* Yellow */
+}
+
+.console-message.action-close {
+    border-left: 3px solid #3b82f6; /* Blue */
+}
+
+.console-message.action-none {
+    border-left: 3px solid #9ca3af; /* Gray */
+}
+
+.console-message.action-error {
+    border-left: 3px solid #ef4444; /* Red */
+}
+
+/* Legacy classes for backwards compatibility */
 .console-message.error {
-    background: rgba(255, 82, 82, 0.1);
-    border-left: 2px solid var(--color-loss);
+    border-left: 3px solid #ef4444;
 }
 
 .console-message.running {
-    background: rgba(0, 230, 118, 0.1);
-    border-left: 2px solid var(--color-running);
+    border-left: 3px solid #22c55e;
 }
 
 .console-message.info {
-    background: rgba(17, 205, 239, 0.1);
-    border-left: 2px solid var(--brand-accent);
+    border-left: 3px solid #3b82f6;
 }
 
 .console-time {
@@ -1058,7 +1113,6 @@ section h2 {
     font-size: 0.65rem;
     white-space: nowrap;
     flex-shrink: 0;
-    display: none; /* Hide time in compact view */
 }
 
 .console-status {
@@ -1567,4 +1621,65 @@ section h2 {
     .decision-card {
         page-break-inside: avoid;
     }
+}
+
+/* ============================================================================
+   MODE TOGGLE SWITCH (Cycle/Direct)
+   ============================================================================ */
+
+.mode-switch {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.mode-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--border-primary);
+    border-radius: 20px;
+    transition: all 0.3s ease;
+}
+
+.mode-slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 2px;
+    bottom: 2px;
+    background-color: var(--text-muted);
+    border-radius: 50%;
+    transition: all 0.3s ease;
+}
+
+#mode-toggle:checked + .mode-slider {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    border-color: #dc3545;
+}
+
+#mode-toggle:checked + .mode-slider:before {
+    transform: translateX(16px);
+    background-color: white;
+}
+
+.mode-switch:hover .mode-slider {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+#mode-toggle:checked + .mode-slider:hover {
+    background: linear-gradient(135deg, #e4606d 0%, #d63545 100%);
+}
+
+/* Remove image button hover */
+#remove-image-btn:hover {
+    opacity: 1 !important;
+    color: #dc3545;
 }

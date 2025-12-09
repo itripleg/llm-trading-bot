@@ -8,13 +8,15 @@ Provides a simple web interface to monitor:
 - Bot status and activity logs
 """
 
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, send_from_directory
 from flask_cors import CORS
 from pathlib import Path
+from werkzeug.utils import secure_filename
 import sys
 import subprocess
 import psutil
 import os
+import base64
 
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -36,13 +38,27 @@ from web.database import (
     reset_database,
     save_user_input,
     get_active_user_input,
-    archive_user_input
+    archive_user_input,
+    get_active_prompt_preset,
+    set_active_prompt_preset,
+    get_bot_config,
+    update_bot_config
 )
 from config.settings import settings
 
 # Initialize Flask app
 app = Flask(__name__)
 CORS(app)  # Enable CORS for potential API usage
+
+# Upload configuration
+UPLOAD_FOLDER = Path(__file__).parent.parent / 'data' / 'uploads'
+UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # Set database path based on trading mode
 db_mode = "live" if settings.is_live_trading() else "paper"
@@ -93,9 +109,9 @@ def api_account():
             live_state = executor.get_account_state()
 
             if live_state:
-                # Get realized PnL from database (Hyperliquid doesn't track this)
-                db_account = get_latest_account_state()
-                realized_pnl = db_account.get('realized_pnl', 0.0) if db_account else 0.0
+                # Get realized PnL from all closed positions (Hyperliquid doesn't track this)
+                from web.database import get_total_realized_pnl
+                realized_pnl = get_total_realized_pnl()
 
                 return jsonify({
                     'balance_usd': live_state.get('account_value', 0.0),
@@ -216,22 +232,33 @@ def api_positions():
             if live_state and 'positions' in live_state:
                 # Convert Hyperliquid positions to our format
                 # Hyperliquid returns assetPositions with nested 'position' objects
+                # Get database positions to fetch entry timestamps
+                db_positions = get_open_positions()
+                db_positions_map = {p['coin']: p for p in db_positions}
+
                 positions = []
                 for asset_pos in live_state['positions']:
                     if 'position' in asset_pos:
                         pos = asset_pos['position']
+                        coin = pos.get('coin')
                         size = float(pos.get('szi', 0))
                         entry_px = float(pos.get('entryPx', 0))
                         leverage_obj = pos.get('leverage', {})
                         leverage = float(leverage_obj.get('value', 1)) if isinstance(leverage_obj, dict) else float(leverage_obj)
 
+                        # Get entry_time from database if available
+                        entry_time = None
+                        if coin in db_positions_map:
+                            entry_time = db_positions_map[coin].get('entry_time')
+
                         positions.append({
-                            'coin': pos.get('coin'),
+                            'coin': coin,
                             'side': 'long' if size > 0 else 'short',
                             'entry_price': entry_px,
                             'quantity_usd': abs(size) * entry_px,  # Approximate position value
                             'leverage': leverage,
                             'unrealized_pnl': float(pos.get('unrealizedPnl', 0)),
+                            'entry_time': entry_time,  # From database
                             'status': 'open',
                             'source': f'hyperliquid_live_{network}'
                         })
@@ -400,15 +427,32 @@ def api_bot_status():
     Get current bot status.
 
     Returns:
-        JSON with bot state and process status
+        JSON with bot state, process status, and next cycle info
     """
     state = read_bot_state()
     is_running = is_bot_process_running()
 
+    # Get next cycle time saved by the bot (more accurate than calculating)
+    next_cycle_time = None
+    cycle_interval = None
+
+    try:
+        # Read the next_cycle_time that the bot saves after each cycle
+        from web.database import get_bot_setting
+        next_cycle_time = get_bot_setting('next_cycle_time')
+
+        config = get_bot_config()
+        cycle_interval = config['execution_interval_seconds']
+
+    except Exception as e:
+        print(f"[WARN] Could not get next cycle time: {e}")
+
     return jsonify({
         'state': state,
         'is_process_running': is_running,
-        'control_file': str(BOT_CONTROL_FILE)
+        'control_file': str(BOT_CONTROL_FILE),
+        'cycle_interval_seconds': cycle_interval,
+        'next_cycle_time': next_cycle_time
     })
 
 
@@ -546,15 +590,48 @@ def api_user_input():
     elif request.method == 'POST':
         data = request.json
         message = data.get('message')
-        
+        message_type = data.get('message_type', 'cycle')  # 'cycle' or 'interrupt'
+        image_path = data.get('image_path')  # Optional path to uploaded image
+
         if not message:
             return jsonify({'error': 'Message is required'}), 400
-            
-        input_id = save_user_input(message)
+
+        if message_type not in ['cycle', 'interrupt']:
+            return jsonify({'error': 'message_type must be "cycle" or "interrupt"'}), 400
+
+        input_id = save_user_input(message, message_type, image_path)
+
+        # If interrupt type (direct query), trigger immediate response
+        if message_type == 'interrupt':
+            # Import here to avoid circular dependency
+            from llm.direct_query import handle_direct_query
+
+            try:
+                # Get bot's immediate response to the query
+                response = handle_direct_query(message, image_path)
+
+                return jsonify({
+                    'success': True,
+                    'id': input_id,
+                    'message': 'Query sent',
+                    'message_type': message_type,
+                    'response': response  # Return bot's answer immediately
+                })
+            except Exception as e:
+                print(f"[ERROR] Direct query failed: {e}")
+                return jsonify({
+                    'success': True,
+                    'id': input_id,
+                    'message': 'Query saved but response failed',
+                    'message_type': message_type,
+                    'error': str(e)
+                })
+
         return jsonify({
             'success': True,
             'id': input_id,
-            'message': 'User input saved'
+            'message': 'User input saved',
+            'message_type': message_type
         })
 
     elif request.method == 'DELETE':
@@ -564,6 +641,293 @@ def api_user_input():
             archive_user_input(active_input['id'])
             return jsonify({'success': True, 'message': 'User input cleared'})
         return jsonify({'success': True, 'message': 'No active input to clear'})
+
+
+@app.route('/api/upload_image', methods=['POST'])
+def api_upload_image():
+    """Upload an image for chart analysis."""
+    if 'image' not in request.files:
+        return jsonify({'error': 'No image file provided'}), 400
+
+    file = request.files['image']
+
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+
+    if file and allowed_file(file.filename):
+        from datetime import datetime
+        # Create unique filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        ext = file.filename.rsplit('.', 1)[1].lower()
+        filename = f"chart_{timestamp}.{ext}"
+        filepath = app.config['UPLOAD_FOLDER'] / filename
+
+        file.save(str(filepath))
+
+        return jsonify({
+            'success': True,
+            'filename': filename,
+            'path': str(filepath)
+        })
+    else:
+        return jsonify({'error': 'Invalid file type. Allowed: png, jpg, jpeg, gif, webp'}), 400
+
+
+@app.route('/api/prompt_presets', methods=['GET'])
+def api_get_prompt_presets():
+    """Get list of available prompt presets."""
+    try:
+        from llm.prompt_presets import list_presets, get_preset_description
+
+        presets_list = list_presets()
+        presets_with_descriptions = []
+
+        for key, name in presets_list.items():
+            presets_with_descriptions.append({
+                'key': key,
+                'name': name,
+                'description': get_preset_description(key)
+            })
+
+        active_preset = get_active_prompt_preset()
+
+        return jsonify({
+            'presets': presets_with_descriptions,
+            'active_preset': active_preset
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/prompt_presets/active', methods=['GET', 'POST'])
+def api_active_prompt_preset():
+    """Get or set the active prompt preset."""
+    if request.method == 'GET':
+        active_preset = get_active_prompt_preset()
+        return jsonify({'active_preset': active_preset})
+
+    elif request.method == 'POST':
+        data = request.json
+        preset_name = data.get('preset_name')
+
+        if not preset_name:
+            return jsonify({'error': 'preset_name is required'}), 400
+
+        # Validate preset exists
+        from llm.prompt_presets import list_presets
+        available_presets = list_presets()
+
+        if preset_name not in available_presets:
+            return jsonify({
+                'error': f'Invalid preset. Available: {", ".join(available_presets.keys())}'
+            }), 400
+
+        # Set the new preset
+        success = set_active_prompt_preset(preset_name)
+
+        if success:
+            return jsonify({
+                'success': True,
+                'active_preset': preset_name,
+                'message': f'Preset changed to {available_presets[preset_name]}'
+            })
+        else:
+            return jsonify({'error': 'Failed to set preset'}), 500
+
+
+@app.route('/api/prompt_presets/preview/<preset_name>', methods=['GET'])
+def api_preview_prompt_preset(preset_name):
+    """Generate and return the full system prompt for a preset."""
+    try:
+        from llm.prompts import TradingConfig, PromptBuilder
+        from llm.prompt_presets import list_presets
+
+        available_presets = list_presets()
+
+        if preset_name not in available_presets:
+            return jsonify({
+                'error': f'Invalid preset. Available: {", ".join(available_presets.keys())}'
+            }), 400
+
+        # Create config with the preset
+        trading_config = TradingConfig(
+            exchange_name=settings.exchange_name if hasattr(settings, 'exchange_name') else "Hyperliquid",
+            min_position_size_usd=settings.min_position_size_usd if hasattr(settings, 'min_position_size_usd') else 10.0,
+            max_leverage=settings.max_leverage if hasattr(settings, 'max_leverage') else 10.0,
+            preset_name=preset_name,
+        )
+
+        # Generate the system prompt
+        prompt_builder = PromptBuilder(config=trading_config)
+        system_prompt = prompt_builder.get_system_prompt()
+
+        return jsonify({
+            'preset_name': preset_name,
+            'preset_display_name': available_presets[preset_name],
+            'system_prompt': system_prompt
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/prompt_presets/sample_user_prompt', methods=['GET'])
+def api_sample_user_prompt():
+    """Generate a sample user prompt showing what context Claude receives."""
+    try:
+        from llm.prompts import TradingConfig, PromptBuilder
+        import pandas as pd
+        from datetime import datetime, timedelta
+
+        # Get active preset
+        active_preset = get_active_prompt_preset()
+
+        # Create config
+        trading_config = TradingConfig(
+            exchange_name=settings.exchange_name if hasattr(settings, 'exchange_name') else "Hyperliquid",
+            min_position_size_usd=settings.min_position_size_usd if hasattr(settings, 'min_position_size_usd') else 10.0,
+            max_leverage=settings.max_leverage if hasattr(settings, 'max_leverage') else 10.0,
+            preset_name=active_preset,
+        )
+
+        prompt_builder = PromptBuilder(config=trading_config)
+
+        # Create sample market data
+        sample_market_data = {
+            'BTC/USDC:USDC': {
+                'current_price': 45000.00,
+                'indicators': pd.DataFrame({
+                    'timestamp': pd.date_range(end=datetime.now(), periods=50, freq='5min'),
+                    'close': [45000 + (i * 10) for i in range(50)],
+                    'ema_20': [44950 + (i * 10) for i in range(50)],
+                    'rsi_7': [50 + (i % 20) for i in range(50)],
+                    'macd': [0.5 + (i * 0.01) for i in range(50)],
+                }),
+                'funding_rate': 0.0001,
+                'open_interest': 1500000000
+            },
+            'ETH/USDC:USDC': {
+                'current_price': 2500.00,
+                'indicators': pd.DataFrame({
+                    'timestamp': pd.date_range(end=datetime.now(), periods=50, freq='5min'),
+                    'close': [2500 + (i * 5) for i in range(50)],
+                    'ema_20': [2490 + (i * 5) for i in range(50)],
+                    'rsi_7': [45 + (i % 15) for i in range(50)],
+                    'macd': [0.3 + (i * 0.005) for i in range(50)],
+                }),
+                'funding_rate': 0.00005,
+                'open_interest': 800000000
+            }
+        }
+
+        # Create sample account state
+        sample_account_state = {
+            'available_cash': 100.00,
+            'total_value': 150.00,
+            'total_return_pct': 50.0,
+            'sharpe_ratio': 1.2,
+            'positions': [
+                {
+                    'coin': 'BTC/USDC:USDC',
+                    'side': 'long',
+                    'entry_price': 44000.00,
+                    'current_price': 45000.00,
+                    'quantity_usd': 50.00,
+                    'leverage': 5.0,
+                    'unrealized_pnl': 5.68,
+                    'profit_target': 46000.00,
+                    'stop_loss': 43500.00
+                }
+            ],
+            'trade_history': get_closed_positions(limit=10),
+            'recent_decisions': get_recent_decisions(limit=5)
+        }
+
+        # Build sample user prompt
+        user_prompt = prompt_builder.build_trading_prompt(
+            market_data=sample_market_data,
+            account_state=sample_account_state,
+            minutes_since_start=120,
+            user_guidance=None,
+            leverage_limits={'BTC/USDC:USDC': 50, 'ETH/USDC:USDC': 25}
+        )
+
+        return jsonify({
+            'user_prompt': user_prompt,
+            'note': 'This is a sample showing the format. Live prompts include real-time market data.'
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/bot_config', methods=['GET', 'POST'])
+def api_bot_config():
+    """Get or update bot configuration settings."""
+    if request.method == 'GET':
+        try:
+            config = get_bot_config()
+            return jsonify({
+                'success': True,
+                'config': config
+            })
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    elif request.method == 'POST':
+        try:
+            data = request.json
+            config_updates = {}
+
+            # Validate and update each field
+            if 'min_margin_usd' in data:
+                val = float(data['min_margin_usd'])
+                if val <= 0:
+                    return jsonify({'error': 'min_margin_usd must be > 0'}), 400
+                config_updates['min_margin_usd'] = val
+
+            if 'min_balance_threshold' in data:
+                val = float(data['min_balance_threshold'])
+                if val < 0:
+                    return jsonify({'error': 'min_balance_threshold must be >= 0'}), 400
+                config_updates['min_balance_threshold'] = val
+
+            if 'max_margin_usd' in data:
+                val = float(data['max_margin_usd'])
+                if val <= 0:
+                    return jsonify({'error': 'max_margin_usd must be > 0'}), 400
+                config_updates['max_margin_usd'] = val
+
+            if 'execution_interval_seconds' in data:
+                val = int(data['execution_interval_seconds'])
+                if val < 10:
+                    return jsonify({'error': 'execution_interval_seconds must be >= 10'}), 400
+                config_updates['execution_interval_seconds'] = val
+
+            if 'max_open_positions' in data:
+                val = int(data['max_open_positions'])
+                if val < 1 or val > 10:
+                    return jsonify({'error': 'max_open_positions must be between 1 and 10'}), 400
+                config_updates['max_open_positions'] = val
+
+            if not config_updates:
+                return jsonify({'error': 'No valid configuration updates provided'}), 400
+
+            success = update_bot_config(config_updates)
+
+            if success:
+                return jsonify({
+                    'success': True,
+                    'message': 'Configuration updated successfully',
+                    'config': get_bot_config()
+                })
+            else:
+                return jsonify({'error': 'Failed to update configuration'}), 500
+
+        except ValueError as e:
+            return jsonify({'error': f'Invalid value: {str(e)}'}), 400
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/database/status')

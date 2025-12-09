@@ -142,6 +142,14 @@ def init_database():
             cursor.execute("ALTER TABLE decisions ADD COLUMN execution_timestamp TEXT")
             print("[DB Migration] Added execution tracking columns to decisions table")
 
+        # Migrate user_inputs table to add message_type and image_path columns
+        try:
+            cursor.execute("SELECT message_type FROM user_inputs LIMIT 1")
+        except sqlite3.OperationalError:
+            cursor.execute("ALTER TABLE user_inputs ADD COLUMN message_type TEXT DEFAULT 'cycle'")
+            cursor.execute("ALTER TABLE user_inputs ADD COLUMN image_path TEXT")
+            print("[DB Migration] Added message_type and image_path columns to user_inputs table")
+
         # Bot status table - activity logs
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS bot_status (
@@ -163,6 +171,27 @@ def init_database():
                 is_active INTEGER DEFAULT 1,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
+        """)
+
+        # Bot settings table - store configuration
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bot_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Initialize default settings if not exists
+        cursor.execute("""
+            INSERT OR IGNORE INTO bot_settings (key, value)
+            VALUES
+                ('prompt_preset', 'aggressive_small_account'),
+                ('min_margin_usd', '1.0'),
+                ('min_balance_threshold', '1.0'),
+                ('max_margin_usd', '1000.0'),
+                ('execution_interval_seconds', '600'),
+                ('max_open_positions', '3')
         """)
 
         # Create indices for common queries
@@ -463,6 +492,20 @@ def get_all_positions(limit: int = 100) -> List[Dict[str, Any]]:
         return [dict(row) for row in cursor.fetchall()]
 
 
+def get_total_realized_pnl() -> float:
+    """Calculate total realized PnL from all closed positions."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT SUM(realized_pnl) as total
+            FROM positions
+            WHERE status = 'closed' AND realized_pnl IS NOT NULL
+        """)
+
+        result = cursor.fetchone()
+        return float(result['total']) if result and result['total'] is not None else 0.0
+
+
 # ============================================================================
 # BOT STATUS OPERATIONS
 # ============================================================================
@@ -511,10 +554,15 @@ def get_bot_status_history(limit: int = 50) -> List[Dict[str, Any]]:
 # USER INPUT OPERATIONS
 # ============================================================================
 
-def save_user_input(message: str) -> int:
+def save_user_input(message: str, message_type: str = 'cycle', image_path: Optional[str] = None) -> int:
     """
     Save a new user input message.
     Automatically archives previous active messages (sets is_active=0).
+
+    Args:
+        message: The user's text message
+        message_type: 'cycle' (included in next cycle) or 'interrupt' (trigger immediate decision)
+        image_path: Optional path to uploaded image (for chart analysis)
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -525,9 +573,9 @@ def save_user_input(message: str) -> int:
 
         # Insert new message
         cursor.execute("""
-            INSERT INTO user_inputs (timestamp, message, is_active)
-            VALUES (?, ?, 1)
-        """, (timestamp, message))
+            INSERT INTO user_inputs (timestamp, message, message_type, image_path, is_active)
+            VALUES (?, ?, ?, ?, 1)
+        """, (timestamp, message, message_type, image_path))
 
         return cursor.lastrowid
 
@@ -552,6 +600,81 @@ def archive_user_input(input_id: int) -> bool:
         cursor = conn.cursor()
         cursor.execute("UPDATE user_inputs SET is_active = 0 WHERE id = ?", (input_id,))
         return cursor.rowcount > 0
+
+
+# ============================================================================
+# BOT SETTINGS
+# ============================================================================
+
+def get_bot_setting(key: str, default: str = None) -> Optional[str]:
+    """
+    Get a bot setting value.
+
+    Args:
+        key: Setting key
+        default: Default value if not found
+
+    Returns:
+        Setting value or default
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM bot_settings WHERE key = ?", (key,))
+        row = cursor.fetchone()
+        return row['value'] if row else default
+
+
+def set_bot_setting(key: str, value: str) -> bool:
+    """
+    Set a bot setting value.
+
+    Args:
+        key: Setting key
+        value: Setting value
+
+    Returns:
+        True if successful
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        timestamp = datetime.utcnow().isoformat()
+        cursor.execute("""
+            INSERT OR REPLACE INTO bot_settings (key, value, updated_at)
+            VALUES (?, ?, ?)
+        """, (key, value, timestamp))
+        return cursor.rowcount > 0
+
+
+def get_active_prompt_preset() -> str:
+    """Get the currently active prompt preset name."""
+    return get_bot_setting('prompt_preset', 'aggressive_small_account')
+
+
+def set_active_prompt_preset(preset_name: str) -> bool:
+    """Set the active prompt preset."""
+    return set_bot_setting('prompt_preset', preset_name)
+
+
+def get_bot_config() -> Dict[str, Any]:
+    """Get all bot configuration settings."""
+    return {
+        'min_margin_usd': float(get_bot_setting('min_margin_usd', '1.0')),
+        'min_balance_threshold': float(get_bot_setting('min_balance_threshold', '1.0')),
+        'max_margin_usd': float(get_bot_setting('max_margin_usd', '1000.0')),
+        'execution_interval_seconds': int(get_bot_setting('execution_interval_seconds', '600')),
+        'max_open_positions': int(get_bot_setting('max_open_positions', '3')),
+    }
+
+
+def update_bot_config(config: Dict[str, Any]) -> bool:
+    """Update bot configuration settings."""
+    try:
+        for key, value in config.items():
+            set_bot_setting(key, str(value))
+        return True
+    except Exception as e:
+        print(f"[ERROR] Failed to update bot config: {e}")
+        return False
 
 
 # ============================================================================
@@ -724,8 +847,11 @@ def reset_database(preserve_schema: bool = True) -> bool:
                 cursor.execute("DELETE FROM sqlite_sequence WHERE name='positions'")
                 cursor.execute("DELETE FROM sqlite_sequence WHERE name='bot_status'")
                 cursor.execute("DELETE FROM sqlite_sequence WHERE name='user_inputs'")
-                
-                print(f"[OK] Database data cleared: {DB_PATH}")
+
+                # Reclaim disk space by running VACUUM
+                cursor.execute("VACUUM")
+
+                print(f"[OK] Database data cleared and disk space reclaimed: {DB_PATH}")
             else:
                 # Drop all tables and reinitialize
                 cursor.execute("DROP TABLE IF EXISTS decisions")

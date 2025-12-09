@@ -3,15 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Alpha Arena Mini - Analysis Dashboard</title>
+    <title>Motherbot</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <div class="container">
-        <!-- Compact Header -->
-        <header>
-            <div class="header-top">
-                <h1>Alpha Arena Mini</h1>
+        <!-- Unified Header + Tabs (Sticky) -->
+        <div style="position: sticky; top: 0; z-index: 100; background: var(--bg-primary); border-bottom: 1px solid var(--border-primary);">
+            <!-- Compact Header -->
+            <header style="border-bottom: none;">
+                <div class="header-top">
+                    <h1>Nexus Trader</h1>
                 <div class="header-controls">
                     <!-- Network Toggle -->
                     <div class="network-toggle">
@@ -64,34 +66,57 @@
                     <span class="label">Last Update</span>
                     <span class="value" id="last-update">Never</span>
                 </div>
+                <div class="stat-compact">
+                    <span class="label">Next Cycle</span>
+                    <span class="value" id="next-cycle-countdown" style="font-variant-numeric: tabular-nums;">--:--</span>
+                </div>
             </div>
         </header>
+        </div>
+        <!-- End Unified Header -->
 
-        <!-- Main Navigation Tabs -->
-        <nav class="main-tabs">
-            <button class="main-tab active" onclick="switchMainTab('dashboard')">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                </svg>
-                Dashboard
-            </button>
-            <button class="main-tab" onclick="switchMainTab('database')">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
-                    <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
-                    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
-                </svg>
-                Database
-            </button>
-        </nav>
+        <!-- Main Container: Tabs/Content + Sidebar -->
+        <div style="display: grid; grid-template-columns: 1fr 320px; gap: var(--spacing-lg);">
+            <!-- Left Column: Tabs + Tab Content -->
+            <div>
+                <!-- Main Navigation Tabs -->
+                <nav class="main-tabs" style="position: sticky; top: 72px; z-index: 90; background: transparent; border: none;">
+                    <button class="main-tab active" onclick="switchMainTab('dashboard')">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                        </svg>
+                        Dashboard
+                    </button>
+                    <button class="main-tab" onclick="switchMainTab('strategy')">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                            <path d="M2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                        </svg>
+                        Strategy
+                    </button>
+                    <button class="main-tab" onclick="switchMainTab('database')">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                        </svg>
+                        Database
+                    </button>
+                    <button class="main-tab" onclick="switchMainTab('settings')">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M12 1v6m0 6v6m9-9h-6m-6 0H3m15.364 6.364l-4.243-4.243m-6.364 0L3.636 17.364m12.728 0l-4.243-4.243m-6.364 0L3.636 6.636"></path>
+                        </svg>
+                        Settings
+                    </button>
+                </nav>
 
-        <!-- Dashboard Tab Content -->
-        <div class="tab-content active" id="tab-dashboard">
-            <!-- Main Dashboard Grid Layout -->
-            <div class="dashboard-grid">
-            <!-- Main Content Area -->
-            <div class="main-content">
+                <!-- Tab Contents Area -->
+                <div style="overflow-y: auto; max-height: calc(100vh - 160px);">
+                <!-- Dashboard Tab Content -->
+                <div class="tab-content active" id="tab-dashboard">
+                    <div class="main-content">
                 <!-- Latest Decision - Main Focus -->
                 <section class="latest-decision" id="latest-decision-section">
                     <div class="section-header">
@@ -116,42 +141,79 @@
                         <div class="no-data-card">No decisions yet. Run test_real_data.py to analyze market conditions.</div>
                     </div>
                 </section>
-            </div>
-
-            <!-- Sidebar -->
-            <div class="sidebar">
-                <!-- Active Positions -->
-                <div class="sidebar-section" id="sidebar-positions" style="display: none;">
-                    <h3>Active Positions</h3>
-                    <div id="positions-list"></div>
                 </div>
+                </div>
+                <!-- End Dashboard Tab -->
 
-                <!-- Supervisor Input Section (Compact) -->
-                <div class="sidebar-section">
-                    <h3>Supervisor Input</h3>
-                    <div class="input-container">
-                        <textarea id="supervisor-message" placeholder="Enter bot guidance..." rows="2"></textarea>
-                        <div class="input-actions">
-                            <button id="send-input-btn" class="primary-btn">Send</button>
-                            <button id="clear-input-btn" class="secondary-btn">Clear</button>
+                <!-- Strategy Tab Content -->
+                <div class="tab-content" id="tab-strategy">
+            <section class="strategy-editor">
+                <h2 style="margin: 0 0 var(--spacing-lg) 0; font-size: 1.5rem; color: var(--text-primary);">Trading Strategy Configuration</h2>
+
+                <div style="display: grid; gap: var(--spacing-lg); max-width: 100%; width: 100%;">
+                    <!-- Preset Selector -->
+                    <div style="background: var(--bg-secondary); padding: var(--spacing-lg); border-radius: var(--radius-md); border: 1px solid var(--border-primary);">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--spacing-md);">
+                            <div>
+                                <h3 style="margin: 0; font-size: 1rem; color: var(--text-primary);">Strategy Preset</h3>
+                                <p style="margin: 4px 0 0 0; font-size: 0.85rem; color: var(--text-secondary);">Choose a pre-configured strategy or customize below</p>
+                            </div>
+                            <div style="display: flex; gap: var(--spacing-sm);">
+                                <button id="load-preset-btn" class="secondary-btn" style="padding: 8px 16px;">Load Preset</button>
+                                <button id="apply-strategy-btn" class="primary-btn" style="padding: 8px 16px;">Apply & Save</button>
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 300px 1fr; gap: var(--spacing-md);">
+                            <div>
+                                <label for="strategy-preset-select" style="display: block; font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 6px;">Preset Template:</label>
+                                <select id="strategy-preset-select" style="width: 100%; padding: 10px; border: 1px solid var(--border-primary); border-radius: var(--radius-sm); background: var(--bg-primary); color: var(--text-primary); font-size: 0.875rem;">
+                                    <option value="">Loading...</option>
+                                </select>
+                            </div>
+
+                            <div id="preset-description-box" style="padding: 12px; background: rgba(0, 123, 255, 0.05); border-left: 4px solid #007bff; border-radius: var(--radius-sm); display: none;">
+                                <div style="font-size: 0.75rem; font-weight: 600; color: #007bff; margin-bottom: 4px; text-transform: uppercase;">Description</div>
+                                <div id="preset-description-text" style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;"></div>
+                            </div>
+                        </div>
+
+                        <div id="active-preset-indicator" style="margin-top: var(--spacing-md); padding: 10px; background: rgba(40, 167, 69, 0.1); border-left: 4px solid #28a745; border-radius: var(--radius-sm); display: none;">
+                            <div style="font-size: 0.75rem; font-weight: 600; color: #28a745; margin-bottom: 2px; text-transform: uppercase;">Currently Active</div>
+                            <div id="active-preset-name" style="font-size: 0.875rem; color: var(--text-primary);"></div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">⚠️ Changes require bot restart to take effect</div>
                         </div>
                     </div>
-                    <div id="active-input-display" style="display: none; margin-top: 12px; padding: 12px; background: rgba(40, 167, 69, 0.1); border-left: 4px solid #28a745; border-radius: 4px;">
-                        <div style="font-size: 0.75em; color: #28a745; font-weight: bold; margin-bottom: 4px;">ACTIVE GUIDANCE</div>
-                        <div id="active-input-text" style="color: var(--text-primary); font-size: 0.85em;"></div>
-                        <div id="active-input-time" style="font-size: 0.7em; color: var(--text-muted); margin-top: 4px;"></div>
-                    </div>
-                </div>
 
-                <!-- Bot Activity -->
-                <div class="sidebar-section">
-                    <h3>Activity Log</h3>
-                    <div class="activity-console" id="activity-console">
-                        <div class="console-message">Waiting for bot activity...</div>
+                    <!-- Prompt Viewer with Toggle -->
+                    <div style="background: var(--bg-secondary); padding: var(--spacing-lg); border-radius: var(--radius-md); border: 1px solid var(--border-primary);">
+                        <!-- Header with Toggle -->
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--spacing-md);">
+                            <div>
+                                <h3 style="margin: 0; font-size: 1rem; color: var(--text-primary);" id="prompt-view-title">System Prompt (Claude's Instructions)</h3>
+                                <p style="margin: 4px 0 0 0; font-size: 0.85rem; color: var(--text-secondary);" id="prompt-view-description">This defines Claude's trading personality, risk tolerance, and decision-making rules</p>
+                            </div>
+
+                            <!-- System/User Toggle -->
+                            <div style="display: flex; align-items: center; gap: 8px; padding: 4px; background: rgba(255,255,255,0.05); border-radius: 6px; border: 1px solid var(--border-primary);">
+                                <button id="view-system-btn" class="prompt-view-toggle active" onclick="switchPromptView('system')" style="padding: 6px 12px; border: none; background: var(--brand-primary); color: white; border-radius: 4px; cursor: pointer; font-size: 0.75em; font-weight: 500; transition: all 0.2s;">
+                                    System
+                                </button>
+                                <button id="view-user-btn" class="prompt-view-toggle" onclick="switchPromptView('user')" style="padding: 6px 12px; border: none; background: transparent; color: var(--text-muted); border-radius: 4px; cursor: pointer; font-size: 0.75em; font-weight: 500; transition: all 0.2s;">
+                                    User
+                                </button>
+                            </div>
+                        </div>
+
+                        <textarea id="prompt-editor"
+                                  style="width: 100%; min-height: 500px; padding: 16px; font-family: 'Courier New', monospace; font-size: 0.875rem; line-height: 1.6; border: 1px solid var(--border-primary); border-radius: var(--radius-sm); background: var(--bg-primary); color: var(--text-primary); resize: vertical;"
+                                  placeholder="Loading prompt..."></textarea>
+                        <div style="margin-top: var(--spacing-sm); font-size: 0.75rem; color: var(--text-muted);">
+                            <span id="prompt-editor-tip">💡 Tip: You can edit the System Prompt directly. Changes are saved when you click "Apply & Save"</span>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
+            </section>
         </div>
 
         <!-- Database Tab Content -->
@@ -260,16 +322,15 @@
                             <thead>
                                 <tr>
                                     <th>Time</th>
-                                    <th>Balance</th>
-                                    <th>Equity</th>
+                                    <th>Account Value</th>
                                     <th>Unrealized P&L</th>
                                     <th>Realized P&L</th>
                                     <th>Total P&L</th>
-                                    <th>Open Positions</th>
+                                    <th># Positions</th>
                                 </tr>
                             </thead>
                             <tbody id="account-table-body">
-                                <tr><td colspan="7" style="text-align: center; padding: var(--spacing-xl); color: var(--text-muted);">Loading...</td></tr>
+                                <tr><td colspan="6" style="text-align: center; padding: var(--spacing-xl); color: var(--text-muted);">Loading...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -300,7 +361,225 @@
             </div>
         </section>
         </div>
-    </div>
+        <!-- End Database Tab -->
+
+        <!-- Settings Tab Content -->
+        <div class="tab-content" id="tab-settings">
+            <section style="max-width: 600px; margin: 0 auto; padding: var(--spacing-lg);">
+                <h2 style="margin: 0 0 var(--spacing-lg) 0; font-size: 1.5rem; color: var(--text-primary); text-align: center;">⚙️ Bot Configuration</h2>
+
+                <div style="display: grid; gap: var(--spacing-lg);">
+
+                    <!-- Trading Limits -->
+                    <div style="background: var(--bg-secondary); padding: var(--spacing-lg); border-radius: var(--radius-md); border: 1px solid var(--border-primary);">
+                        <h3 style="margin: 0 0 4px 0; font-size: 0.95rem; color: var(--text-primary); font-weight: 600;">💰 Trading Limits</h3>
+                        <p style="margin: 0 0 var(--spacing-md) 0; font-size: 0.8rem; color: var(--text-muted);">Position sizes and balance thresholds</p>
+
+                        <div style="display: grid; gap: 14px;">
+                            <!-- Min Margin -->
+                            <div style="display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center;">
+                                <div>
+                                    <label style="display: block; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 2px;">
+                                        Min Margin
+                                    </label>
+                                    <div style="font-size: 0.7em; color: var(--text-muted);">
+                                        $1 × 40x = $40 position
+                                    </div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <span style="font-size: 0.85em; color: var(--text-muted);">$</span>
+                                    <input type="number" id="setting-min-margin" min="0.1" step="0.1"
+                                           style="width: 80px; padding: 8px 10px; border: 1px solid var(--border-primary); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); font-size: 0.9rem; text-align: right;">
+                                </div>
+                            </div>
+
+                            <!-- Max Margin -->
+                            <div style="display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center;">
+                                <div>
+                                    <label style="display: block; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 2px;">
+                                        Max Margin
+                                    </label>
+                                    <div style="font-size: 0.7em; color: var(--text-muted);">
+                                        Maximum collateral per trade
+                                    </div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <span style="font-size: 0.85em; color: var(--text-muted);">$</span>
+                                    <input type="number" id="setting-max-margin" min="1" step="1"
+                                           style="width: 80px; padding: 8px 10px; border: 1px solid var(--border-primary); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); font-size: 0.9rem; text-align: right;">
+                                </div>
+                            </div>
+
+                            <!-- Min Balance -->
+                            <div style="display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center;">
+                                <div>
+                                    <label style="display: block; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 2px;">
+                                        Min Balance
+                                    </label>
+                                    <div style="font-size: 0.7em; color: var(--text-muted);">
+                                        Bot pauses below this
+                                    </div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <span style="font-size: 0.85em; color: var(--text-muted);">$</span>
+                                    <input type="number" id="setting-min-balance" min="0" step="0.1"
+                                           style="width: 80px; padding: 8px 10px; border: 1px solid var(--border-primary); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); font-size: 0.9rem; text-align: right;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Execution Settings -->
+                    <div style="background: var(--bg-secondary); padding: var(--spacing-lg); border-radius: var(--radius-md); border: 1px solid var(--border-primary);">
+                        <h3 style="margin: 0 0 4px 0; font-size: 0.95rem; color: var(--text-primary); font-weight: 600;">⏱️ Execution</h3>
+                        <p style="margin: 0 0 var(--spacing-md) 0; font-size: 0.8rem; color: var(--text-muted);">Bot cycle timing and position limits</p>
+
+                        <div style="display: grid; gap: 14px;">
+                            <!-- Cycle Interval -->
+                            <div style="display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center;">
+                                <div>
+                                    <label style="display: block; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 2px;">
+                                        Cycle Interval
+                                    </label>
+                                    <div style="font-size: 0.7em; color: var(--text-muted);">
+                                        How often bot analyzes
+                                    </div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <input type="number" id="setting-interval" min="10" step="10"
+                                           style="width: 80px; padding: 8px 10px; border: 1px solid var(--border-primary); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); font-size: 0.9rem; text-align: right;">
+                                    <span style="font-size: 0.85em; color: var(--text-muted);">sec</span>
+                                </div>
+                            </div>
+
+                            <!-- Max Open Positions -->
+                            <div style="display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center;">
+                                <div>
+                                    <label style="display: block; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 2px;">
+                                        Max Positions
+                                    </label>
+                                    <div style="font-size: 0.7em; color: var(--text-muted);">
+                                        Diversify across coins
+                                    </div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <input type="number" id="setting-max-positions" min="1" max="10" step="1"
+                                           style="width: 80px; padding: 8px 10px; border: 1px solid var(--border-primary); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); font-size: 0.9rem; text-align: right;">
+                                    <span style="font-size: 0.85em; color: var(--text-muted);">coins</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div style="display: flex; justify-content: center; gap: 12px; flex-wrap: wrap;">
+                        <button id="reset-settings-btn" class="secondary-btn" style="padding: 10px 20px; font-size: 0.9em;">Reset</button>
+                        <button id="save-settings-btn" class="primary-btn" style="padding: 10px 32px; font-weight: 600; font-size: 0.9em;">Save Settings</button>
+                    </div>
+
+                    <!-- Info Note -->
+                    <div style="padding: 10px 12px; background: rgba(255, 193, 7, 0.08); border-left: 3px solid #ffc107; border-radius: 4px; text-align: center;">
+                        <div style="font-size: 0.75em; color: var(--text-secondary); line-height: 1.5;">
+                            Changes apply on next cycle • No restart needed
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+        <!-- End Settings Tab -->
+                </div>
+                <!-- End Tab Contents Area -->
+            </div>
+            <!-- End Left Column -->
+
+            <!-- Right Column: Sidebar (Always Visible) -->
+            <div class="sidebar" style="position: sticky; top: 72px; overflow-y: auto; max-height: calc(100vh - 80px);">
+                <!-- Active Positions -->
+                <div class="sidebar-section" id="sidebar-positions">
+                    <h3>Active Positions</h3>
+                    <div id="positions-list">
+                        <div style="padding: var(--spacing-md); text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+                            No open positions
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Human Financier Input -->
+                <div class="sidebar-section">
+                    <h3 style="display: flex; align-items: center; gap: 6px;">
+                        💼 Human Financier
+                    </h3>
+
+                    <!-- Active Guidance Display -->
+                    <div id="active-input-display" style="display: none; margin-bottom: 12px;">
+                        <div style="padding: 12px; background: linear-gradient(135deg, rgba(40, 167, 69, 0.15) 0%, rgba(40, 167, 69, 0.05) 100%); border-left: 4px solid #28a745; border-radius: 6px; position: relative;">
+                            <div style="font-size: 0.7em; color: #28a745; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 6px; text-transform: uppercase;">📢 Active Directive</div>
+                            <div id="active-input-text" style="color: var(--text-primary); font-size: 0.9em; line-height: 1.5; font-style: italic;"></div>
+                            <div id="active-input-time" style="font-size: 0.65em; color: var(--text-muted); margin-top: 6px; opacity: 0.8;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Input Area -->
+                    <div class="input-container" style="background: rgba(255, 255, 255, 0.02); padding: 12px; border-radius: 8px; border: 1px solid var(--border-primary);">
+                        <textarea id="supervisor-message"
+                                  placeholder="Give guidance or attach a chart..."
+                                  rows="3"
+                                  style="width: 100%; padding: 10px; background: var(--bg-primary); border: 1px solid var(--border-primary); border-radius: 6px; color: var(--text-primary); font-size: 0.85em; line-height: 1.5; resize: vertical; font-family: inherit;"></textarea>
+
+                        <!-- Image Upload Area -->
+                        <div id="image-upload-area" style="margin-top: 8px; padding: 6px 8px; background: rgba(255,255,255,0.03); border: 1px dashed var(--border-primary); border-radius: 4px; display: none;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 0.7em; color: var(--text-muted);">📎</span>
+                                <span id="image-filename" style="font-size: 0.7em; color: var(--text-muted); flex: 1;"></span>
+                                <button id="remove-image-btn" onclick="removeImage()" style="padding: 2px 6px; font-size: 0.65em; background: none; border: none; color: var(--text-muted); cursor: pointer; opacity: 0.7; transition: opacity 0.2s;">✕</button>
+                            </div>
+                        </div>
+
+                        <div class="input-actions" style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
+                            <!-- Hidden file input -->
+                            <input type="file" id="image-input" accept="image/*" style="display: none;" onchange="handleImageSelect(event)">
+
+                            <!-- Attach Chart Button -->
+                            <button onclick="document.getElementById('image-input').click()"
+                                    title="Attach chart image"
+                                    style="padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-primary); border-radius: 6px; color: var(--text-muted); cursor: pointer; font-size: 0.85em; transition: all 0.2s; display: flex; align-items: center; gap: 4px;">
+                                <span style="font-size: 1.1em;">📎</span>
+                            </button>
+
+                            <!-- Mode Toggle Switch -->
+                            <div style="display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid var(--border-primary);">
+                                <span id="mode-label" style="font-size: 0.7em; color: var(--text-muted); min-width: 45px; text-align: right;">Cycle</span>
+                                <label class="mode-switch" title="Cycle: Guidance for next trading run&#10;Direct: Ask bot a question now (status, reasoning, etc.)">
+                                    <input type="checkbox" id="mode-toggle" style="display: none;">
+                                    <span class="mode-slider"></span>
+                                </label>
+                            </div>
+
+                            <!-- Send Button -->
+                            <button id="send-btn" class="primary-btn" style="flex: 1; padding: 8px 14px; border-radius: 6px; font-weight: 500; font-size: 0.85em; transition: all 0.2s;">
+                                Send
+                            </button>
+
+                            <!-- Clear Button -->
+                            <button id="clear-input-btn"
+                                    title="Clear input"
+                                    style="padding: 6px 10px; background: none; border: 1px solid var(--border-primary); border-radius: 6px; color: var(--text-muted); cursor: pointer; font-size: 0.8em; transition: all 0.2s;">
+                                ✕
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bot Activity -->
+                <div class="sidebar-section">
+                    <h3>Activity Log</h3>
+                    <div class="activity-console" id="activity-console">
+                        <div class="console-message">Waiting for bot activity...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- End Main Layout: Tabs + Sidebar -->
 
     <script>
         // Current network (mainnet or testnet)
@@ -483,12 +762,21 @@
                         </div>
             `;
 
-            // Show entry price for buy/sell/hold decisions
+            // Show entry price and live PnL for buy/sell/hold decisions (open positions)
             if ((decision.signal === 'buy_to_enter' || decision.signal === 'sell_to_enter' || decision.signal === 'hold') && decision.entry_price) {
                 html += `
                         <div class="metric">
                             <span class="metric-label">Entry</span>
-                            <span class="metric-value">$${decision.entry_price.toFixed(0)}</span>
+                            <span class="metric-value">$${decision.entry_price.toFixed(2)}</span>
+                        </div>
+                `;
+
+                // Add live PnL if this is a position we're tracking
+                // The decision card will be updated dynamically with current price data
+                html += `
+                        <div class="metric" id="live-pnl-${decision.id}">
+                            <span class="metric-label">Live PnL</span>
+                            <span class="metric-value" style="color: var(--text-muted);">Loading...</span>
                         </div>
                 `;
             }
@@ -682,6 +970,55 @@
             return html;
         }
 
+        // Update live PnL for the current decision if it's an open position
+        async function updateLivePnL(decision) {
+            if (!decision || !decision.entry_price) return;
+            if (decision.signal === 'close') return; // Already closed
+
+            const pnlElement = document.getElementById(`live-pnl-${decision.id}`);
+            if (!pnlElement) return;
+
+            try {
+                // Fetch current positions to get live price and PnL
+                const response = await fetch(getApiUrl(API.positions + '?status=open'));
+                const positions = await response.json();
+
+                // Find the position that matches this decision's coin
+                const position = positions.find(p => p.coin === decision.coin);
+
+                if (position && position.unrealized_pnl !== undefined) {
+                    // Calculate current price from PnL
+                    // PnL = (current_price - entry_price) * size * leverage (for long)
+                    // For short: PnL = (entry_price - current_price) * size * leverage
+                    // We can derive current_price, but we also have unrealized_pnl directly
+
+                    // Calculate percentage change from PnL
+                    // unrealized_pnl / (quantity_usd) gives us the return percentage (already accounts for leverage)
+                    const percentChange = (position.unrealized_pnl / position.quantity_usd) * 100;
+
+                    // Determine color
+                    const isPositive = position.unrealized_pnl > 0;
+                    const isNegative = position.unrealized_pnl < 0;
+                    const colorClass = isPositive ? 'positive' : isNegative ? 'negative' : '';
+
+                    // Update the PnL display
+                    const valueSpan = pnlElement.querySelector('.metric-value');
+                    valueSpan.className = `metric-value ${colorClass}`;
+                    valueSpan.textContent = `$${position.unrealized_pnl.toFixed(2)} (${percentChange > 0 ? '+' : ''}${percentChange.toFixed(1)}%)`;
+                } else {
+                    // Position not found (maybe closed), show as closed
+                    const valueSpan = pnlElement.querySelector('.metric-value');
+                    valueSpan.style.color = 'var(--text-muted)';
+                    valueSpan.textContent = 'Closed';
+                }
+            } catch (error) {
+                console.error('Error fetching live PnL:', error);
+                const valueSpan = pnlElement.querySelector('.metric-value');
+                valueSpan.style.color = 'var(--text-muted)';
+                valueSpan.textContent = 'Error';
+            }
+        }
+
         // Generic toggle function
         function toggleSection(elementId) {
             const element = document.getElementById(elementId);
@@ -724,6 +1061,52 @@
             }
         }
 
+        // Countdown timer state
+        let nextCycleTime = null;
+        let countdownInterval = null;
+
+        // Update countdown display
+        function updateCountdown() {
+            const countdownEl = document.getElementById('next-cycle-countdown');
+
+            if (!nextCycleTime) {
+                countdownEl.textContent = '--:--';
+                return;
+            }
+
+            const now = new Date();
+            const target = new Date(nextCycleTime);
+            const diffMs = target - now;
+
+            if (diffMs <= 0) {
+                countdownEl.textContent = 'Due now';
+                countdownEl.style.color = 'var(--color-gain)';
+                return;
+            }
+
+            const totalSeconds = Math.floor(diffMs / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+
+            countdownEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+            // Color coding based on time remaining
+            if (totalSeconds < 30) {
+                countdownEl.style.color = 'var(--color-gain)'; // Green when close
+            } else {
+                countdownEl.style.color = 'var(--text-primary)';
+            }
+        }
+
+        // Start countdown timer
+        function startCountdownTimer() {
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
+            countdownInterval = setInterval(updateCountdown, 1000);
+            updateCountdown(); // Initial update
+        }
+
         // Update bot status
         async function updateStatus() {
             try {
@@ -739,6 +1122,22 @@
                 const state = data.state || 'stopped';
                 dot.className = 'status-indicator ' + state;
                 text.textContent = state.charAt(0).toUpperCase() + state.slice(1);
+
+                // Update countdown timer data
+                if (data.next_cycle_time && state === 'running') {
+                    nextCycleTime = data.next_cycle_time;
+                    if (!countdownInterval) {
+                        startCountdownTimer();
+                    }
+                } else {
+                    nextCycleTime = null;
+                    if (countdownInterval) {
+                        clearInterval(countdownInterval);
+                        countdownInterval = null;
+                    }
+                    document.getElementById('next-cycle-countdown').textContent = '--:--';
+                    document.getElementById('next-cycle-countdown').style.color = 'var(--text-primary)';
+                }
 
                 // Update button visibility based on state
                 if (state === 'running') {
@@ -907,6 +1306,9 @@
 
             // Update navigation controls
             updateNavigationControls();
+
+            // Update live PnL if this is an open position
+            updateLivePnL(decision);
         }
 
         // Update navigation controls state
@@ -932,15 +1334,20 @@
                 const response = await fetch(getApiUrl(API.positions + '?status=open'));
                 const positions = await response.json();
 
-                const section = document.getElementById('sidebar-positions');
                 const list = document.getElementById('positions-list');
 
                 if (positions.length === 0) {
-                    section.style.display = 'none';
+                    list.innerHTML = `
+                        <div style="padding: var(--spacing-md); text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+                            No open positions
+                        </div>
+                    `;
                 } else {
-                    section.style.display = 'block';
                     let html = '';
                     positions.forEach(pos => {
+                        const entryTime = pos.entry_time ? formatRelativeTime(pos.entry_time) : 'Unknown';
+                        const fullTimestamp = pos.entry_time ? new Date(pos.entry_time).toLocaleString() : '';
+
                         html += `
                             <div class="position-card">
                                 <div class="position-header">
@@ -951,6 +1358,9 @@
                                     <span>Entry: $${pos.entry_price.toFixed(2)}</span>
                                     <span>Size: $${pos.quantity_usd.toFixed(2)}</span>
                                     <span>Leverage: ${pos.leverage}x</span>
+                                </div>
+                                <div style="font-size: 0.7em; color: var(--text-muted); margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.05);" title="${fullTimestamp}">
+                                    Opened ${entryTime}
                                 </div>
                             </div>
                         `;
@@ -968,61 +1378,122 @@
         // Update bot activity console
         async function updateActivity() {
             try {
-                const response = await fetch(API.status);
-                const data = await response.json();
+                // Fetch recent decisions for activity log
+                const decisionsResponse = await fetch(getApiUrl(API.decisions + '?limit=15'));
+                const decisionsData = await decisionsResponse.json();
+                const decisions = decisionsData.decisions || decisionsData;
+
+                // Also fetch bot status for errors
+                const statusResponse = await fetch(API.status);
+                const statusData = await statusResponse.json();
+                const statusHistory = statusData.history || [];
 
                 const console = document.getElementById('activity-console');
-                const history = data.history || [];
 
-                // Consolidate consecutive "hold" actions - only show one hold until a different action
-                const filteredHistory = [];
-                let lastWasHold = false;
-
-                for (const log of history) {
-                    const message = (log.message || log.error || '').toLowerCase();
-                    const isHold = message.includes('hold') || log.status === 'hold';
-
-                    if (isHold) {
-                        // Only add hold if the previous entry wasn't a hold
-                        if (!lastWasHold) {
-                            filteredHistory.push(log);
-                            lastWasHold = true;
-                        }
-                        // Skip this hold otherwise
-                    } else {
-                        // Non-hold action, add it
-                        filteredHistory.push(log);
-                        lastWasHold = false;
-                    }
+                if (decisions.length === 0 && statusHistory.length === 0) {
+                    console.innerHTML = '<div class="console-message">Waiting for bot activity...</div>';
+                    return;
                 }
 
-                if (filteredHistory.length === 0) {
-                    console.innerHTML = '<div class="console-message">Waiting for bot activity...</div>';
-                } else {
-                    // Show last 10 activity logs in reverse chronological order
-                    let html = '';
-                    filteredHistory.forEach(log => {
-                        const timestamp = formatRelativeTime(log.timestamp);
-                        const statusClass = log.status === 'error' ? 'error' :
-                                           log.status === 'running' ? 'running' :
-                                           'info';
+                let html = '';
 
-                        const message = log.message || log.error || 'No message';
+                // Combine decisions and errors into activity items
+                const activities = [];
+
+                // Add decisions
+                decisions.forEach(decision => {
+                    activities.push({
+                        type: 'decision',
+                        timestamp: decision.timestamp,
+                        signal: decision.signal,
+                        coin: decision.coin,
+                        execution_status: decision.execution_status,
+                        data: decision
+                    });
+                });
+
+                // Add errors from bot status
+                statusHistory.forEach(log => {
+                    if (log.status === 'error') {
+                        activities.push({
+                            type: 'error',
+                            timestamp: log.timestamp,
+                            message: log.error || log.message,
+                            data: log
+                        });
+                    }
+                });
+
+                // Sort by timestamp (newest first)
+                activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+                // Take last 10
+                const recentActivities = activities.slice(0, 10);
+
+                if (recentActivities.length === 0) {
+                    console.innerHTML = '<div class="console-message">Waiting for bot activity...</div>';
+                    return;
+                }
+
+                // Render activities
+                recentActivities.forEach(activity => {
+                    const relativeTime = formatRelativeTime(activity.timestamp);
+                    const fullTimestamp = new Date(activity.timestamp).toLocaleString();
+
+                    if (activity.type === 'decision') {
+                        // Map signal to action label and color
+                        const signalConfig = {
+                            'buy_to_enter': { label: 'BUY', class: 'action-buy' },
+                            'sell_to_enter': { label: 'SELL', class: 'action-sell' },
+                            'hold': { label: 'HOLD', class: 'action-hold' },
+                            'close': { label: 'CLOSE', class: 'action-close' },
+                            'no_action': { label: 'NO ACTION', class: 'action-none' }
+                        };
+                        const config = signalConfig[activity.signal] || { label: activity.signal.toUpperCase(), class: 'action-none' };
+
+                        // Debug: log unexpected signals
+                        if (!signalConfig[activity.signal]) {
+                            console.log('[Activity] Unknown signal:', activity.signal, 'for', activity.coin);
+                        }
+
+                        // Override with error color if execution failed
+                        let finalClass = config.class;
+                        if (activity.execution_status === 'failed') {
+                            finalClass = 'action-error';
+                        }
 
                         html += `
-                            <div class="console-message ${statusClass}">
-                                <span class="console-time">[${timestamp}]</span>
-                                <span class="console-status">${log.status.toUpperCase()}</span>
-                                <span class="console-text">${message}</span>
+                            <div class="console-message ${finalClass}">
+                                <div class="console-message-main">
+                                    <span class="console-time">[${relativeTime}]</span>
+                                    <span class="console-status">${config.label}</span>
+                                    <span class="console-text">${activity.coin}</span>
+                                </div>
+                                <div class="console-message-details">
+                                    <span class="console-timestamp">🕐 ${fullTimestamp}</span>
+                                </div>
                             </div>
                         `;
-                    });
+                    } else if (activity.type === 'error') {
+                        html += `
+                            <div class="console-message action-error">
+                                <div class="console-message-main">
+                                    <span class="console-time">[${relativeTime}]</span>
+                                    <span class="console-status">ERROR</span>
+                                    <span class="console-text">${activity.message}</span>
+                                </div>
+                                <div class="console-message-details">
+                                    <span class="console-timestamp">🕐 ${fullTimestamp}</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
 
-                    console.innerHTML = html;
+                console.innerHTML = html;
 
-                    // Auto-scroll to bottom to show latest activity
-                    console.scrollTop = console.scrollHeight;
-                }
+                // Auto-scroll to bottom to show latest activity
+                console.scrollTop = console.scrollHeight;
 
             } catch (error) {
                 console.error('Error fetching activity:', error);
@@ -1031,8 +1502,16 @@
 
         // Load debug database data
         async function loadDebugData() {
-            const table = document.getElementById('debug-table-select').value;
+            const tableSelect = document.getElementById('debug-table-select');
             const container = document.getElementById('debug-entries');
+
+            // Skip if elements don't exist (legacy code)
+            if (!tableSelect || !container) {
+                console.log('[Debug] Debug table elements not found, skipping...');
+                return;
+            }
+
+            const table = tableSelect.value;
 
             try {
                 container.innerHTML = '<div style="color: #6c757d;">Loading...</div>';
@@ -1196,7 +1675,7 @@
 
                 const tbody = document.getElementById('account-table-body');
                 if (history.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: var(--spacing-xl); color: var(--text-muted);">No account history found</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: var(--spacing-xl); color: var(--text-muted);">No account history found</td></tr>';
                     return;
                 }
 
@@ -1206,11 +1685,13 @@
                     const realizedClass = (h.realized_pnl || 0) > 0 ? 'positive' : (h.realized_pnl || 0) < 0 ? 'negative' : '';
                     const totalClass = (h.total_pnl || 0) > 0 ? 'positive' : (h.total_pnl || 0) < 0 ? 'negative' : '';
 
+                    // Use equity_usd if available, otherwise use balance_usd
+                    const accountValue = h.equity_usd || h.balance_usd || 0;
+
                     return `
                         <tr>
                             <td>${time}</td>
-                            <td>$${h.balance_usd?.toFixed(2) || '0.00'}</td>
-                            <td>$${h.equity_usd?.toFixed(2) || '0.00'}</td>
+                            <td>$${accountValue.toFixed(2)}</td>
                             <td class="${unrealizedClass}">$${h.unrealized_pnl?.toFixed(2) || '0.00'}</td>
                             <td class="${realizedClass}">$${h.realized_pnl?.toFixed(2) || '0.00'}</td>
                             <td class="${totalClass}">$${h.total_pnl?.toFixed(2) || '0.00'}</td>
@@ -1220,14 +1701,20 @@
                 }).join('');
             } catch (error) {
                 console.error('Failed to load account history:', error);
-                document.getElementById('account-table-body').innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--color-loss);">Error loading account history</td></tr>';
+                document.getElementById('account-table-body').innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--color-loss);">Error loading account history</td></tr>';
             }
         }
 
         // Load database status (LEGACY - keeping for compatibility)
         async function loadDatabaseStatus() {
             const container = document.getElementById('database-status-display');
-            
+
+            // Skip if element doesn't exist (legacy code)
+            if (!container) {
+                console.log('[Debug] Database status display not found, skipping...');
+                return;
+            }
+
             try {
                 container.innerHTML = '<div style="color: #6c757d;">Loading database status...</div>';
                 
@@ -1349,6 +1836,11 @@
                 loadDatabaseOverview()
             ]);
 
+            // Update live PnL for the currently displayed decision
+            if (allDecisions.length > 0 && currentDecisionIndex >= 0) {
+                updateLivePnL(allDecisions[currentDecisionIndex]);
+            }
+
             document.getElementById('last-update').textContent = new Date().toLocaleTimeString('en-US', {
                 hour: '2-digit',
                 minute: '2-digit'
@@ -1398,11 +1890,309 @@
         // Auto-refresh database status every 60 seconds
         setInterval(loadDatabaseStatus, 60000);
 
-        // Reload debug data when table selection changes
-        document.getElementById('debug-table-select').addEventListener('change', loadDebugData);
+        // Reload debug data when table selection changes (only if element exists)
+        const debugTableSelect = document.getElementById('debug-table-select');
+        if (debugTableSelect) {
+            debugTableSelect.addEventListener('change', loadDebugData);
+        }
+
+        // --- Trading Strategy Tab Logic ---
+
+        let currentPresetData = null;
+        let activePresetName = null;
+        let currentPromptView = 'system';  // 'system' or 'user'
+
+        async function switchPromptView(view) {
+            currentPromptView = view;
+            const editor = document.getElementById('prompt-editor');
+            const title = document.getElementById('prompt-view-title');
+            const description = document.getElementById('prompt-view-description');
+            const tip = document.getElementById('prompt-editor-tip');
+            const systemBtn = document.getElementById('view-system-btn');
+            const userBtn = document.getElementById('view-user-btn');
+
+            // Update button styles
+            if (view === 'system') {
+                systemBtn.style.background = 'var(--brand-primary)';
+                systemBtn.style.color = 'white';
+                userBtn.style.background = 'transparent';
+                userBtn.style.color = 'var(--text-muted)';
+
+                title.textContent = 'System Prompt (Claude\'s Instructions)';
+                description.textContent = 'This defines Claude\'s trading personality, risk tolerance, and decision-making rules';
+                tip.textContent = '💡 Tip: You can edit the System Prompt directly. Changes are saved when you click "Apply & Save"';
+
+                // Load system prompt
+                editor.value = window.currentSystemPrompt || 'Loading...';
+                editor.readOnly = false;
+                editor.style.opacity = '1';
+            } else {
+                systemBtn.style.background = 'transparent';
+                systemBtn.style.color = 'var(--text-muted)';
+                userBtn.style.background = 'var(--brand-primary)';
+                userBtn.style.color = 'white';
+
+                title.textContent = 'User Prompt (Trading Context)';
+                description.textContent = 'This shows the live market data, positions, and context sent to Claude with each decision';
+                tip.textContent = '📊 This is a live preview showing what Claude sees during trading. Read-only.';
+
+                // Load sample user prompt
+                editor.value = 'Loading sample context...';
+                editor.readOnly = true;
+                editor.style.opacity = '0.8';
+
+                // Fetch sample user prompt
+                try {
+                    const response = await fetch('/api/prompt_presets/sample_user_prompt');
+                    const data = await response.json();
+                    if (data.user_prompt) {
+                        editor.value = data.user_prompt;
+                    } else {
+                        editor.value = 'Error loading user prompt preview';
+                    }
+                } catch (error) {
+                    console.error('[Strategy] Error loading user prompt:', error);
+                    editor.value = 'Error loading user prompt preview: ' + error.message;
+                }
+            }
+        }
+
+        // Make it globally accessible
+        window.switchPromptView = switchPromptView;
+
+        async function loadStrategyTab() {
+            try {
+                const response = await fetch('/api/prompt_presets');
+                const data = await response.json();
+
+                if (data.error) {
+                    console.error('[Strategy] Error loading presets:', data.error);
+                    return;
+                }
+
+                const select = document.getElementById('strategy-preset-select');
+                const activeIndicator = document.getElementById('active-preset-indicator');
+                const activePresetNameEl = document.getElementById('active-preset-name');
+
+                // Save active preset
+                activePresetName = data.active_preset;
+
+                // Populate dropdown
+                select.innerHTML = '';
+                data.presets.forEach(preset => {
+                    const option = document.createElement('option');
+                    option.value = preset.key;
+                    option.textContent = preset.name;
+                    select.appendChild(option);
+                });
+
+                // Show active preset indicator
+                activeIndicator.style.display = 'block';
+                activePresetNameEl.textContent = data.presets.find(p => p.key === activePresetName)?.name || activePresetName;
+
+                // Load the active preset into the editor by default
+                await loadPresetPrompt(activePresetName);
+
+                console.log('[Strategy] Loaded presets, active:', activePresetName);
+            } catch (error) {
+                console.error('[Strategy] Error loading presets:', error);
+            }
+        }
+
+        async function loadPresetPrompt(presetKey) {
+            try {
+                const response = await fetch(`/api/prompt_presets/preview/${presetKey}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    alert('Error loading preset: ' + data.error);
+                    return;
+                }
+
+                currentPresetData = data;
+
+                // Update description box
+                const descBox = document.getElementById('preset-description-box');
+                const descText = document.getElementById('preset-description-text');
+                const presets = await (await fetch('/api/prompt_presets')).json();
+                const preset = presets.presets.find(p => p.key === presetKey);
+
+                if (preset) {
+                    descText.textContent = preset.description;
+                    descBox.style.display = 'block';
+                } else {
+                    descBox.style.display = 'none';
+                }
+
+                // Load into editor
+                const editor = document.getElementById('prompt-editor');
+                editor.value = data.system_prompt;
+
+                // Store for toggling
+                window.currentSystemPrompt = data.system_prompt;
+
+                console.log('[Strategy] Loaded preset prompt:', presetKey);
+            } catch (error) {
+                console.error('[Strategy] Error loading preset prompt:', error);
+                alert('Error loading preset prompt');
+            }
+        }
+
+        async function applyStrategy() {
+            const presetKey = document.getElementById('strategy-preset-select').value;
+
+            if (!confirm(`Apply and save this strategy?\n\nThis will set "${presetKey}" as the active preset.\n\nNote: Bot must be restarted for changes to take effect.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/prompt_presets/active', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ preset_name: presetKey })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(`✓ Strategy applied!\n\nActive preset: ${data.message}\n\n⚠️ Restart the bot for changes to take effect.`);
+                    await loadStrategyTab(); // Reload to update active indicator
+                } else {
+                    alert('Failed to apply strategy: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('[Strategy] Error applying strategy:', error);
+                alert('Error applying strategy');
+            }
+        }
+
+        // Setup Strategy tab event listeners
+        const strategyPresetSelect = document.getElementById('strategy-preset-select');
+        if (strategyPresetSelect) {
+            strategyPresetSelect.addEventListener('change', function() {
+                // Just update the description, don't auto-apply
+                const descBox = document.getElementById('preset-description-box');
+                descBox.style.display = 'none';
+            });
+        }
+
+        const loadPresetBtn = document.getElementById('load-preset-btn');
+        if (loadPresetBtn) {
+            loadPresetBtn.addEventListener('click', function() {
+                const presetKey = document.getElementById('strategy-preset-select').value;
+                if (presetKey) {
+                    loadPresetPrompt(presetKey);
+                } else {
+                    alert('Please select a preset first');
+                }
+            });
+        }
+
+        const applyStrategyBtn = document.getElementById('apply-strategy-btn');
+        if (applyStrategyBtn) {
+            applyStrategyBtn.addEventListener('click', applyStrategy);
+        }
+
+        // Load strategy tab data when page loads
+        loadStrategyTab();
+
+        // --- Settings Tab Logic ---
+
+        async function loadSettings() {
+            try {
+                const response = await fetch('/api/bot_config');
+                const data = await response.json();
+
+                if (data.success && data.config) {
+                    document.getElementById('setting-min-margin').value = data.config.min_margin_usd;
+                    document.getElementById('setting-max-margin').value = data.config.max_margin_usd;
+                    document.getElementById('setting-min-balance').value = data.config.min_balance_threshold;
+                    document.getElementById('setting-interval').value = data.config.execution_interval_seconds;
+                    document.getElementById('setting-max-positions').value = data.config.max_open_positions;
+                }
+            } catch (error) {
+                console.error('[Settings] Error loading config:', error);
+            }
+        }
+
+        async function saveSettings() {
+            const config = {
+                min_margin_usd: parseFloat(document.getElementById('setting-min-margin').value),
+                max_margin_usd: parseFloat(document.getElementById('setting-max-margin').value),
+                min_balance_threshold: parseFloat(document.getElementById('setting-min-balance').value),
+                execution_interval_seconds: parseInt(document.getElementById('setting-interval').value),
+                max_open_positions: parseInt(document.getElementById('setting-max-positions').value)
+            };
+
+            try {
+                const response = await fetch('/api/bot_config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('✓ Settings saved!\n\nChanges will take effect on the next bot cycle.');
+                    await loadSettings(); // Reload to confirm
+                } else {
+                    alert('Failed to save settings: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('[Settings] Error saving:', error);
+                alert('Error saving settings');
+            }
+        }
+
+        async function resetSettings() {
+            if (!confirm('Reset all settings to defaults?')) return;
+
+            const defaults = {
+                min_margin_usd: 1.0,
+                max_margin_usd: 1000.0,
+                min_balance_threshold: 1.0,
+                execution_interval_seconds: 600,
+                max_open_positions: 3
+            };
+
+            try {
+                const response = await fetch('/api/bot_config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(defaults)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('✓ Settings reset to defaults!');
+                    await loadSettings();
+                } else {
+                    alert('Failed to reset settings');
+                }
+            } catch (error) {
+                console.error('[Settings] Error resetting:', error);
+                alert('Error resetting settings');
+            }
+        }
+
+        // Settings tab event listeners
+        const saveSettingsBtn = document.getElementById('save-settings-btn');
+        if (saveSettingsBtn) {
+            saveSettingsBtn.addEventListener('click', saveSettings);
+        }
+
+        const resetSettingsBtn = document.getElementById('reset-settings-btn');
+        if (resetSettingsBtn) {
+            resetSettingsBtn.addEventListener('click', resetSettings);
+        }
+
+        // Load settings when page loads
+        loadSettings();
 
         // --- Supervisor Input Logic ---
-        
+
         async function loadActiveInput() {
             try {
                 const response = await fetch('/api/user_input');
@@ -1454,30 +2244,190 @@
             }
         }
         
+        // Global variable for uploaded image
+        let uploadedImagePath = null;
+
+        function showBotResponse(response, userQuestion) {
+            // Create modal overlay
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.7);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+                padding: 20px;
+            `;
+
+            // Create modal content
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                background: var(--bg-card);
+                border: 1px solid var(--border-primary);
+                border-radius: 8px;
+                max-width: 600px;
+                max-height: 80vh;
+                overflow-y: auto;
+                padding: 24px;
+                box-shadow: var(--shadow-lg);
+            `;
+
+            modal.innerHTML = `
+                <div style="display: flex; align-items: start; justify-content: space-between; margin-bottom: 16px;">
+                    <h3 style="margin: 0; color: var(--text-primary); font-size: 1.1em;">💬 Bot Response</h3>
+                    <button onclick="this.closest('[style*=fixed]').remove()" style="background: none; border: none; color: var(--text-muted); font-size: 1.5em; cursor: pointer; padding: 0; line-height: 1;">×</button>
+                </div>
+
+                <div style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 6px; border-left: 3px solid var(--brand-primary); margin-bottom: 16px;">
+                    <div style="font-size: 0.75em; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">Your Question</div>
+                    <div style="color: var(--text-primary); font-size: 0.9em; font-style: italic;">${userQuestion}</div>
+                </div>
+
+                <div style="background: rgba(40,167,69,0.1); padding: 16px; border-radius: 6px; border-left: 3px solid #28a745;">
+                    <div style="font-size: 0.75em; color: #28a745; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Bot's Answer</div>
+                    <div style="color: var(--text-primary); line-height: 1.6; white-space: pre-wrap; font-size: 0.95em;">${response}</div>
+                </div>
+
+                <div style="margin-top: 20px; text-align: right;">
+                    <button onclick="this.closest('[style*=fixed]').remove()" style="padding: 8px 20px; background: var(--brand-primary); border: none; border-radius: 6px; color: white; cursor: pointer; font-weight: 500;">Close</button>
+                </div>
+            `;
+
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+
+            // Close on overlay click
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    overlay.remove();
+                }
+            });
+
+            // Close on Escape key
+            const escHandler = (e) => {
+                if (e.key === 'Escape') {
+                    overlay.remove();
+                    document.removeEventListener('keydown', escHandler);
+                }
+            };
+            document.addEventListener('keydown', escHandler);
+        }
+
+        function handleImageSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('image', file);
+
+            // Show uploading state
+            const uploadArea = document.getElementById('image-upload-area');
+            const filenameEl = document.getElementById('image-filename');
+            uploadArea.style.display = 'block';
+            filenameEl.textContent = 'Uploading...';
+
+            fetch('/api/upload_image', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    uploadedImagePath = data.path;
+                    filenameEl.textContent = data.filename;
+                    console.log('[Image Upload] Uploaded:', data.filename);
+                } else {
+                    alert('Upload failed: ' + (data.error || 'Unknown error'));
+                    removeImage();
+                }
+            })
+            .catch(error => {
+                console.error('[Image Upload] Error:', error);
+                alert('Upload failed');
+                removeImage();
+            });
+        }
+
+        function removeImage() {
+            uploadedImagePath = null;
+            document.getElementById('image-upload-area').style.display = 'none';
+            document.getElementById('image-input').value = '';
+        }
+
         async function sendInput() {
             const textarea = document.getElementById('supervisor-message');
+            const sendBtn = document.getElementById('send-btn');
+            const modeToggle = document.getElementById('mode-toggle');
             const message = textarea.value.trim();
-            
-            if (!message) return;
-            
+            const messageType = modeToggle.checked ? 'interrupt' : 'cycle';
+
+            if (!message && !uploadedImagePath) {
+                alert('Please enter a message or attach an image before sending');
+                return;
+            }
+
+            // Show loading state
+            const originalText = sendBtn.textContent;
+            sendBtn.disabled = true;
+            sendBtn.textContent = 'Sending...';
+
             try {
+                console.log(`[User Input] Sending ${messageType} message:`, message);
+
+                const payload = {
+                    message: message || '(See attached chart)',
+                    message_type: messageType
+                };
+
+                if (uploadedImagePath) {
+                    payload.image_path = uploadedImagePath;
+                }
+
                 const response = await fetch('/api/user_input', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message })
+                    body: JSON.stringify(payload)
                 });
-                
+
                 const data = await response.json();
-                
+                console.log('[User Input] Response:', data);
+
                 if (data.success) {
                     textarea.value = '';
-                    loadActiveInput();
+                    removeImage();
+
+                    // If direct query, show bot's response
+                    if (messageType === 'interrupt' && data.response) {
+                        // Show response in a modal or alert
+                        showBotResponse(data.response, message);
+                    } else {
+                        // Cycle mode - just update active input
+                        loadActiveInput();
+                    }
+
+                    console.log(`[User Input] ${messageType} message sent successfully!`);
+
+                    // Show success feedback
+                    sendBtn.textContent = 'Sent ✓';
+                    setTimeout(() => {
+                        sendBtn.textContent = originalText;
+                        sendBtn.disabled = false;
+                    }, 2000);
                 } else {
                     alert('Failed to send input: ' + (data.error || 'Unknown error'));
+                    sendBtn.textContent = originalText;
+                    sendBtn.disabled = false;
                 }
             } catch (error) {
-                console.error('Error sending input:', error);
-                alert('Error sending input');
+                console.error('[User Input] Error sending input:', error);
+                alert('Error sending input: ' + error.message);
+                sendBtn.textContent = originalText;
+                sendBtn.disabled = false;
             }
         }
         
@@ -1496,10 +2446,70 @@
             }
         }
         
-        document.getElementById('send-input-btn').addEventListener('click', sendInput);
-        document.getElementById('clear-input-btn').addEventListener('click', clearInput);
-        
+        // Setup user input event listeners
+        console.log('[Init] Setting up user input listeners...');
+
+        const sendBtn = document.getElementById('send-btn');
+        const clearBtn = document.getElementById('clear-input-btn');
+        const textarea = document.getElementById('supervisor-message');
+        const modeToggle = document.getElementById('mode-toggle');
+        const modeLabel = document.getElementById('mode-label');
+
+        console.log('[Init] Send button:', sendBtn);
+        console.log('[Init] Clear button:', clearBtn);
+        console.log('[Init] Textarea:', textarea);
+        console.log('[Init] Mode toggle:', modeToggle);
+
+        // Update label when toggle changes
+        if (modeToggle && modeLabel) {
+            modeToggle.addEventListener('change', function() {
+                if (this.checked) {
+                    modeLabel.textContent = 'Direct';
+                    modeLabel.style.color = '#dc3545';
+                } else {
+                    modeLabel.textContent = 'Cycle';
+                    modeLabel.style.color = 'var(--text-muted)';
+                }
+            });
+        }
+
+        if (sendBtn) {
+            sendBtn.addEventListener('click', function() {
+                console.log('[Click] Send button clicked!');
+                sendInput();
+            });
+            console.log('[Init] Send button listener attached');
+        } else {
+            console.error('[Init] Send button not found!');
+        }
+
+        if (clearBtn) {
+            clearBtn.addEventListener('click', function() {
+                console.log('[Click] Clear button clicked!');
+                clearInput();
+            });
+            console.log('[Init] Clear button listener attached');
+        } else {
+            console.error('[Init] Clear button not found!');
+        }
+
+        // Add Enter key support (Ctrl+Enter or Cmd+Enter to send)
+        if (textarea) {
+            textarea.addEventListener('keydown', function(e) {
+                console.log('[Keydown] Key pressed:', e.key, 'Ctrl:', e.ctrlKey, 'Meta:', e.metaKey);
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    console.log('[Keydown] Ctrl+Enter detected, sending...');
+                    e.preventDefault();
+                    sendInput();
+                }
+            });
+            console.log('[Init] Keyboard listener attached');
+        } else {
+            console.error('[Init] Textarea not found!');
+        }
+
         // Load input on start and refresh
+        console.log('[Init] Loading active input...');
         loadActiveInput();
         setInterval(loadActiveInput, 10000); // Check every 10s
 

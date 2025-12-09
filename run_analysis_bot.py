@@ -14,9 +14,18 @@ import sys
 import time
 import signal
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    # Backport for older Python versions if needed, though 3.9+ has it
+    from backports.zoneinfo import ZoneInfo
+
 from typing import Dict, Any
 import msvcrt  # Windows-specific key detection
+
+# Define Eastern Timezone
+EST_TIMEZONE = ZoneInfo("America/New_York")
 
 def flush_input():
     """Flush pending input from the buffer to prevent ghost commands."""
@@ -35,15 +44,17 @@ from trading.account import TradingAccount
 from trading.executor import HyperliquidExecutor  # Live trading
 from config.settings import settings
 from web.database import (
-    get_closed_positions, 
-    get_recent_decisions, 
-    set_database_path, 
-    save_account_state, 
+    get_closed_positions,
+    get_recent_decisions,
+    set_database_path,
+    save_account_state,
     update_decision_execution,
     save_position_entry,
     close_position,
     get_open_positions,
-    get_active_user_input
+    get_active_user_input,
+    get_active_prompt_preset,
+    get_bot_config
 )
 
 # Control file for start/stop
@@ -60,7 +71,8 @@ LATEST_CONTEXT = {
 def print_live_status():
     """Fetch and display current status of active positions."""
     print("\n" + "="*70)
-    print(f"LIVE STATUS CHECK - {datetime.now().strftime('%H:%M:%S')}")
+    print("\n" + "="*70)
+    print(f"LIVE STATUS CHECK - {datetime.now(EST_TIMEZONE).strftime('%H:%M:%S')} ET")
     print("="*70)
     
     executor = LATEST_CONTEXT.get('executor')
@@ -402,38 +414,88 @@ def execute_trade(
                 db_position = next((p for p in open_positions if p['coin'] == coin), None)
                 
                 if db_position:
+                    # Calculate realized PnL
+                    entry_price = db_position['entry_price']
+                    quantity_usd = db_position['quantity_usd']
+                    leverage = db_position['leverage']
+                    side = db_position['side']
+
+                    # Calculate actual quantity in coins (quantity_usd / entry_price)
+                    quantity_coins = quantity_usd / entry_price
+
+                    # Calculate PnL based on side
+                    if side == 'long' or side == 'buy_to_enter':
+                        # Long: profit when price goes up
+                        price_change = current_price - entry_price
+                        realized_pnl = (price_change / entry_price) * quantity_usd * leverage
+                    elif side == 'short' or side == 'sell_to_enter':
+                        # Short: profit when price goes down
+                        price_change = entry_price - current_price
+                        realized_pnl = (price_change / entry_price) * quantity_usd * leverage
+                    else:
+                        # Unknown side, can't calculate properly
+                        realized_pnl = 0.0
+                        print(f"  [WARNING] Unknown position side '{side}', cannot calculate PnL accurately", flush=True)
+
                     # Close existing DB position
                     close_position(
                         position_id=db_position['position_id'],
                         exit_price=current_price,
-                        realized_pnl=0.0  # TODO: Get real PnL from Hyperliquid response if possible
+                        realized_pnl=realized_pnl
                     )
-                    print(f"  [DB] Position closed: {db_position['position_id']}", flush=True)
+                    print(f"  [DB] Position closed: {db_position['position_id']} | Realized PnL: ${realized_pnl:.2f}", flush=True)
                 else:
                     # Position was opened externally or before bot started
-                    # Create a synthetic entry then close it
+                    # Try to get position data from Hyperliquid to calculate real PnL
                     from datetime import datetime
                     position_id = f"{coin.split('/')[0]}_EXT_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                    
-                    # We need to estimate entry details since we don't have them
-                    # Try to get them from the executor if possible, otherwise use current values
-                    # For now, we'll just log what we know
+
+                    # Fetch position data from exchange
+                    position_data = executor.get_position(coin)
+
+                    if position_data:
+                        entry_price = position_data['entry_price']
+                        size = position_data['size']
+                        unrealized_pnl = position_data['unrealized_pnl']
+                        leverage_val = position_data.get('leverage', {}).get('value', decision.leverage)
+
+                        # Determine side from size (positive = long, negative = short)
+                        side = 'long' if size > 0 else 'short'
+
+                        # Use the unrealized PnL from exchange as realized PnL since we're closing
+                        realized_pnl = unrealized_pnl
+
+                        # Calculate quantity in USD
+                        quantity_usd = abs(size) * entry_price
+
+                        print(f"  [INFO] Retrieved external position data: entry=${entry_price:.2f}, size={size:.4f}, unrealized_pnl=${unrealized_pnl:.2f}", flush=True)
+                    else:
+                        # Couldn't get position data, use placeholders
+                        entry_price = current_price
+                        side = 'unknown'
+                        quantity_usd = decision.quantity_usd
+                        leverage_val = decision.leverage
+                        realized_pnl = 0.0
+                        print(f"  [WARNING] Could not retrieve external position data, using placeholders", flush=True)
+
+                    # Log the position entry
                     save_position_entry(
                         position_id=position_id,
                         coin=coin,
-                        side='unknown', # We don't know if it was long/short without querying
-                        entry_price=current_price, # Placeholder
-                        quantity_usd=decision.quantity_usd,
-                        leverage=decision.leverage,
+                        side=side,
+                        entry_price=entry_price,
+                        quantity_usd=quantity_usd,
+                        leverage=leverage_val,
                         decision_id=decision_id
                     )
-                    
+
+                    # Close the position with calculated PnL
                     close_position(
                         position_id=position_id,
                         exit_price=current_price,
-                        realized_pnl=0.0
+                        realized_pnl=realized_pnl
                     )
-                    print(f"  [DB] External position logged and closed: {position_id}", flush=True)
+                    print(f"  [DB] External position logged and closed: {position_id} | Realized PnL: ${realized_pnl:.2f}", flush=True)
             else:
                 print(f"  [INFO] No position to close or close failed", flush=True)
                 update_decision_execution(decision_id, 'failed', error='No position to close or close operation failed')
@@ -479,13 +541,17 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
     """
     try:
         print("\n" + "="*70, flush=True)
-        print(f"ANALYSIS CYCLE - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
+        print("\n" + "="*70, flush=True)
+        print(f"ANALYSIS CYCLE - {datetime.now(EST_TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')} ET", flush=True)
         print("="*70, flush=True)
 
         # Initialize
         fetcher = MarketDataFetcher()
         client = ClaudeClient()
         logger = TradingLogger()
+        
+        # Load configuration
+        bot_config = get_bot_config()
 
         # Get current account state first to see what positions exist
         is_live = settings.is_live_trading() and executor is not None
@@ -557,10 +623,35 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
             latest = market_data[primary_coin]['indicators'].iloc[-1]
             current_price = market_data[primary_coin]['current_price']
 
+            # Get latest candle timestamp and convert to aware EST
+            # OHLCV timestamps from ccxt/pandas are typically naive UTC (or just naive)
+            # We treat them as UTC and convert to EST
+            latest_candle_time = market_data[primary_coin]['ohlcv']['timestamp'].iloc[-1]
+            if latest_candle_time.tzinfo is None:
+                latest_candle_time = latest_candle_time.replace(tzinfo=timezone.utc)
+            
+            latest_candle_time_est = latest_candle_time.astimezone(EST_TIMEZONE)
+            current_time_est = datetime.now(EST_TIMEZONE)
+            
+            candle_age_seconds = (current_time_est - latest_candle_time_est).total_seconds()
+
+            # Check if cycle interval is less than candle timeframe
+            candle_timeframe_seconds = 3 * 60  # 3 minutes
+            cycle_interval = bot_config['execution_interval_seconds']
+
             print(f"\n" + "="*70, flush=True)
             print(f"MARKET DATA SUMMARY - {primary_coin}", flush=True)
             print("="*70, flush=True)
             print(f"Current Price:    ${current_price:,.2f}", flush=True)
+            print(f"Latest Candle:    {latest_candle_time_est.strftime('%Y-%m-%d %H:%M:%S')} ET ({candle_age_seconds:.0f}s ago)", flush=True)
+
+            # Warning if cycle is faster than candle timeframe
+            if cycle_interval < candle_timeframe_seconds:
+                print(f"", flush=True)
+                print(f"⚠️  WARNING: Cycle interval ({cycle_interval}s) < Candle timeframe ({candle_timeframe_seconds}s)", flush=True)
+                print(f"   Bot may see the SAME candle data on consecutive cycles!", flush=True)
+                print(f"   Recommended: Set cycle interval >= 180s (3 minutes) in Settings", flush=True)
+
             print(f"", flush=True)
             print(f"Technical Indicators (3-minute timeframe):", flush=True)
             print(f"  EMA-20:         ${latest.get('ema_20', 0):,.2f}", flush=True)
@@ -607,11 +698,14 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
                       f"PnL: ${pos['unrealized_pnl']:+.2f}", flush=True)
 
         # Pre-flight check: Skip analysis if balance is too low to trade
-        min_practical_balance = 15 # Minimum for Hyperliquid position sizes
-        if account_summary['balance'] < min_practical_balance and account_summary['num_positions'] == 0:
-            print(f"\n[SKIP] Balance ${account_summary['balance']:.2f} below minimum ${min_practical_balance:.2f}", flush=True)
+        # Pre-flight check: Skip analysis if balance is too low to trade
+        # bot_config already loaded at start of cycle
+        min_balance_threshold = bot_config['min_balance_threshold']
+
+        if account_summary['balance'] < min_balance_threshold and account_summary['num_positions'] == 0:
+            print(f"\n[SKIP] Balance ${account_summary['balance']:.2f} below minimum ${min_balance_threshold:.2f}", flush=True)
             print(f"       Cannot open new positions - skipping Claude analysis to save tokens", flush=True)
-            print(f"       Add more funds or close existing positions to resume trading", flush=True)
+            print(f"       Adjust min_balance_threshold in Settings tab or add more funds", flush=True)
             logger.log_bot_status('paused', f'Insufficient balance: ${account_summary["balance"]:.2f}')
             return True  # Cycle complete, just can't trade
 
@@ -629,16 +723,22 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
             'positions': account_summary['positions'],
             'trade_history': trade_history,
             'recent_decisions': recent_decisions,
+            'max_positions': bot_config['max_open_positions'],  # Allow multiple positions
         }
 
         # Calculate minutes since bot started
-        minutes_since_start = int((datetime.now() - start_time).total_seconds() / 60)
+        minutes_since_start = int((datetime.now(EST_TIMEZONE) - start_time).total_seconds() / 60)
 
-        # Create PromptBuilder with configuration
+        # Get active prompt preset from database
+        active_preset = get_active_prompt_preset()
+        print(f"[STRATEGY] Using prompt preset: {active_preset}", flush=True)
+
+        # Create PromptBuilder with configuration from database
         trading_config = TradingConfig(
             exchange_name=settings.exchange_name if hasattr(settings, 'exchange_name') else "Hyperliquid",
-            min_position_size_usd=settings.min_position_size_usd if hasattr(settings, 'min_position_size_usd') else 10.0,
+            min_position_size_usd=bot_config['min_margin_usd'],  # This is margin (collateral), not notional
             max_leverage=settings.max_leverage if hasattr(settings, 'max_leverage') else 10.0,
+            preset_name=active_preset,
         )
         prompt_builder = PromptBuilder(config=trading_config)
         
@@ -648,12 +748,24 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
         if user_guidance:
             print(f"\n[GUIDANCE] Active Supervisor Input: \"{user_guidance}\"", flush=True)
 
+        # Fetch leverage limits from Hyperliquid for each coin
+        leverage_limits = {}
+        if executor:  # Only fetch if we have a live executor
+            for symbol in market_data.keys():
+                try:
+                    max_lev = executor.get_max_leverage(symbol)
+                    leverage_limits[symbol] = max_lev
+                except Exception as e:
+                    print(f"  [WARN] Could not fetch max leverage for {symbol}: {e}", flush=True)
+                    leverage_limits[symbol] = 20  # Safe default
+
         system_prompt = prompt_builder.get_system_prompt()
         user_prompt = prompt_builder.build_trading_prompt(
-            market_data, 
-            account_state, 
+            market_data,
+            account_state,
             minutes_since_start,
-            user_guidance=user_guidance
+            user_guidance=user_guidance,
+            leverage_limits=leverage_limits if leverage_limits else None
         )
 
         # Get Claude's decision
@@ -666,8 +778,8 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
             print("  [FAIL] No response from Claude", flush=True)
             return False
 
-        # Parse decision
-        decision = parse_llm_response(response)
+        # Parse decision (with leverage validation)
+        decision = parse_llm_response(response, leverage_limits=leverage_limits)
 
         if not decision:
             print("  [FAIL] Could not parse response", flush=True)
@@ -867,8 +979,8 @@ def run_bot():
     RUNNING = True
 
     # Track bot start time
-    start_time = datetime.now()
-    print(f"Bot started at: {start_time.strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
+    start_time = datetime.now(EST_TIMEZONE)
+    print(f"Bot started at: {start_time.strftime('%Y-%m-%d %H:%M:%S')} ET", flush=True)
 
     cycle_count = 0
 
@@ -900,17 +1012,23 @@ def run_bot():
             else:
                 print(f"\n[FAIL] Cycle #{cycle_count} had errors", flush=True)
 
-            # Wait 2-3 minutes before next cycle
-            wait_time = 150  # 2.5 minutes
-            next_cycle_time = datetime.now() + timedelta(seconds=wait_time)
+            # Wait before next cycle (configurable from Settings tab)
+            bot_config = get_bot_config()
+            wait_time = bot_config['execution_interval_seconds']
+            next_cycle_time = datetime.now(EST_TIMEZONE) + timedelta(seconds=wait_time)
+
+            # Save next cycle time for web dashboard countdown
+            from web.database import set_bot_setting
+            set_bot_setting('next_cycle_time', next_cycle_time.isoformat())
+
             # Sleep with key check
             # Check every 0.1s
             check_interval = 0.1
             steps = int(wait_time / check_interval)
-            
+
             # Flush any accidental keystrokes before waiting
             flush_input()
-            
+
             print(f"\n[*] Waiting {wait_time} seconds until next cycle...", flush=True)
             print(f"    Next cycle at: {next_cycle_time.strftime('%H:%M:%S')}", flush=True)
             print(f"    Commands: [p]rice check, [q]uit", flush=True)
