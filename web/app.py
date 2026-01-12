@@ -83,6 +83,217 @@ def dashboard():
 # API ROUTES
 # ============================================================================
 
+@app.route('/api/index')
+def api_index():
+    """
+    API Index - List all available endpoints.
+
+    Returns:
+        JSON with all API endpoints organized by category
+    """
+    endpoints = {
+        "Account & Portfolio": [
+            {
+                "path": "/api/account",
+                "method": "GET",
+                "description": "Get current account state (balance, equity, PnL)",
+                "params": {"network": "mainnet|testnet"}
+            },
+            {
+                "path": "/api/account/history",
+                "method": "GET",
+                "description": "Get account state history for charting",
+                "params": {"limit": "int (default: 100)"}
+            },
+            {
+                "path": "/api/stats",
+                "method": "GET",
+                "description": "Get summary statistics (win rate, total trades, PnL)",
+                "params": {}
+            }
+        ],
+        "Trading & Decisions": [
+            {
+                "path": "/api/decisions",
+                "method": "GET",
+                "description": "Get recent trading decisions from Claude",
+                "params": {"limit": "int (default: 20)", "coin": "str (optional)"}
+            },
+            {
+                "path": "/api/positions",
+                "method": "GET",
+                "description": "Get positions (open, closed, or all)",
+                "params": {
+                    "status": "open|closed|all (default: all)",
+                    "limit": "int (default: 50)",
+                    "network": "mainnet|testnet"
+                }
+            }
+        ],
+        "Bot Control": [
+            {
+                "path": "/api/bot/status",
+                "method": "GET",
+                "description": "Get current bot status and next cycle info",
+                "params": {}
+            },
+            {
+                "path": "/api/bot/start",
+                "method": "POST",
+                "description": "Start the analysis bot",
+                "params": {}
+            },
+            {
+                "path": "/api/bot/pause",
+                "method": "POST",
+                "description": "Pause the analysis bot",
+                "params": {}
+            },
+            {
+                "path": "/api/bot/resume",
+                "method": "POST",
+                "description": "Resume the paused bot",
+                "params": {}
+            },
+            {
+                "path": "/api/bot/stop",
+                "method": "POST",
+                "description": "Stop the analysis bot",
+                "params": {}
+            }
+        ],
+        "Bot Configuration": [
+            {
+                "path": "/api/bot_config",
+                "method": "GET",
+                "description": "Get bot configuration settings",
+                "params": {}
+            },
+            {
+                "path": "/api/bot_config",
+                "method": "POST",
+                "description": "Update bot configuration settings",
+                "params": {
+                    "min_margin_usd": "float",
+                    "max_margin_usd": "float",
+                    "min_balance_threshold": "float",
+                    "execution_interval_seconds": "int (>=10)",
+                    "max_open_positions": "int (1-10)"
+                }
+            },
+            {
+                "path": "/api/status",
+                "method": "GET",
+                "description": "Get current bot status with history",
+                "params": {}
+            }
+        ],
+        "User Input & Prompts": [
+            {
+                "path": "/api/user_input",
+                "method": "GET",
+                "description": "Get active user input message",
+                "params": {}
+            },
+            {
+                "path": "/api/user_input",
+                "method": "POST",
+                "description": "Save new user input (cycle or interrupt)",
+                "params": {
+                    "message": "str (required)",
+                    "message_type": "cycle|interrupt",
+                    "image_path": "str (optional)"
+                }
+            },
+            {
+                "path": "/api/user_input",
+                "method": "DELETE",
+                "description": "Clear active user input",
+                "params": {}
+            },
+            {
+                "path": "/api/upload_image",
+                "method": "POST",
+                "description": "Upload an image for chart analysis",
+                "params": {"image": "file (png, jpg, jpeg, gif, webp)"}
+            },
+            {
+                "path": "/api/prompt_presets",
+                "method": "GET",
+                "description": "Get list of available prompt presets",
+                "params": {}
+            },
+            {
+                "path": "/api/prompt_presets/active",
+                "method": "GET",
+                "description": "Get active prompt preset",
+                "params": {}
+            },
+            {
+                "path": "/api/prompt_presets/active",
+                "method": "POST",
+                "description": "Set active prompt preset",
+                "params": {"preset_name": "str (required)"}
+            },
+            {
+                "path": "/api/prompt_presets/preview/<preset_name>",
+                "method": "GET",
+                "description": "Preview full system prompt for a preset",
+                "params": {}
+            },
+            {
+                "path": "/api/prompt_presets/sample_user_prompt",
+                "method": "GET",
+                "description": "Generate sample user prompt showing Claude context",
+                "params": {}
+            }
+        ],
+        "Database Management": [
+            {
+                "path": "/api/database/status",
+                "method": "GET",
+                "description": "Get database statistics and status",
+                "params": {}
+            },
+            {
+                "path": "/api/database/reset",
+                "method": "POST",
+                "description": "Reset (clear) the database",
+                "params": {"preserve_schema": "bool (default: true)"}
+            },
+            {
+                "path": "/api/debug/database",
+                "method": "GET",
+                "description": "Get raw database entries for debugging",
+                "params": {
+                    "table": "decisions|account_state|positions|bot_status",
+                    "limit": "int (default: 5)"
+                }
+            }
+        ]
+    }
+
+    # Count total endpoints
+    total_endpoints = sum(len(category) for category in endpoints.values())
+
+    # Get all endpoint paths for quick reference
+    all_paths = []
+    for category in endpoints.values():
+        for endpoint in category:
+            all_paths.append(f"{endpoint['method']} {endpoint['path']}")
+
+    return jsonify({
+        "version": "1.0.0",
+        "name": "Alpha Arena Mini API",
+        "description": "Trading bot dashboard and control API",
+        "base_url": "http://localhost:5000",
+        "total_endpoints": total_endpoints,
+        "categories": list(endpoints.keys()),
+        "endpoints": endpoints,
+        "all_paths": sorted(all_paths)
+    })
+
+
 @app.route('/api/account')
 def api_account():
     """
@@ -1017,7 +1228,9 @@ if __name__ == '__main__':
     print("="*60)
     print("\nStarting Flask server...")
     print("Dashboard URL: http://localhost:5000")
-    print("\nAvailable API endpoints:")
+    print("\nAPI Documentation:")
+    print("  GET /api/index               - Complete API index (all endpoints)")
+    print("\nKey API endpoints:")
     print("  GET /api/account             - Current account state")
     print("  GET /api/account/history     - Account history")
     print("  GET /api/decisions           - Recent trading decisions")

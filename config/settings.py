@@ -67,7 +67,7 @@ class Settings(BaseSettings):
         default=5,
         description="Maximum leverage allowed",
         gt=0,
-        le=20,  # Hyperliquid max is 20x
+        le=100,  # Updated to 100x per user request
     )
     daily_loss_limit_usd: float = Field(
         default=20.0,
@@ -84,7 +84,7 @@ class Settings(BaseSettings):
 
     # ===== ASSETS CONFIGURATION =====
     trading_assets: str = Field(
-        default="BTC/USD:USD,ETH/USD:USD,SOL/USD:USD",
+        default="BTC,ETH,SOL",
         description="Comma-separated list of trading pairs"
     )
     active_trading_assets: str = Field(

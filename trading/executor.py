@@ -189,7 +189,7 @@ class HyperliquidExecutor:
         Convert USD amount to coin size for order placement, properly rounded.
 
         Args:
-            coin: Coin symbol (e.g., "BTC/USDC:USDC")
+            coin: Coin symbol (e.g., "BTC")
             usd_amount: Amount in USD to trade
             coin_price: Current price of the coin
             leverage: Leverage multiplier (position size = usd * leverage)
@@ -225,7 +225,7 @@ class HyperliquidExecutor:
         Open a market position using USD amount (convenience wrapper).
 
         Args:
-            coin: Coin symbol (e.g., "BTC/USD:USD")
+            coin: Coin symbol (e.g., "BTC")
             is_buy: True for long, False for short
             usd_amount: Margin amount in USD (e.g., $50)
             current_price: Current coin price
@@ -255,7 +255,7 @@ class HyperliquidExecutor:
         Open a market position.
 
         Args:
-            coin: Coin symbol (e.g., "BTC/USD:USD")
+            coin: Coin symbol (e.g., "BTC")
             is_buy: True for long, False for short
             size: Position size in coins (not USD)
             leverage: Optional leverage to set before order (1-50)
@@ -306,7 +306,7 @@ class HyperliquidExecutor:
         Close all positions for a specific coin using market order.
 
         Args:
-            coin: Coin symbol (e.g., "BTC/USD:USD")
+            coin: Coin symbol (e.g., "BTC")
 
         Returns:
             Order result dict if successful, None otherwise
@@ -418,7 +418,7 @@ class HyperliquidExecutor:
         Get current position information for a specific coin.
 
         Args:
-            coin: Coin symbol (e.g., "BTC/USD:USD")
+            coin: Coin symbol (e.g., "BTC")
 
         Returns:
             Position dict or None if no position

@@ -57,6 +57,14 @@ class MarketDataFetcher:
             logger.error(f"Failed to initialize exchange: {e}")
             raise
 
+    def _to_ccxt_symbol(self, symbol: str) -> str:
+        """Convert simple symbol (BTC) to CCXT Hyperliquid format (BTC/USDC:USDC)."""
+        # If it already looks like a CCXT symbol, leave it alone
+        if "/" in symbol and ":" in symbol:
+            return symbol
+        # Otherwise append the standard suffix
+        return f"{symbol}/USDC:USDC"
+
     def fetch_ticker(self, symbol: str) -> Optional[Dict]:
         """
         Fetch current ticker data for a symbol.
@@ -68,7 +76,8 @@ class MarketDataFetcher:
             Dictionary with ticker data or None if error
         """
         try:
-            ticker = self.exchange.fetch_ticker(symbol)
+            ccxt_symbol = self._to_ccxt_symbol(symbol)
+            ticker = self.exchange.fetch_ticker(ccxt_symbol)
 
             # Handle None timestamp from Hyperliquid
             timestamp_ms = ticker.get("timestamp")
@@ -115,7 +124,8 @@ class MarketDataFetcher:
             Empty DataFrame if error occurs
         """
         try:
-            ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
+            ccxt_symbol = self._to_ccxt_symbol(symbol)
+            ohlcv = self.exchange.fetch_ohlcv(ccxt_symbol, timeframe, limit=limit)
 
             if not ohlcv:
                 logger.warning(f"No OHLCV data returned for {symbol} {timeframe}")
@@ -160,7 +170,8 @@ class MarketDataFetcher:
             Funding rate as float or None if error
         """
         try:
-            ticker = self.exchange.fetch_ticker(symbol)
+            ccxt_symbol = self._to_ccxt_symbol(symbol)
+            ticker = self.exchange.fetch_ticker(ccxt_symbol)
             return ticker.get("info", {}).get("fundingRate")
         except Exception as e:
             logger.debug(f"Error fetching funding rate for {symbol}: {e}")
@@ -177,7 +188,8 @@ class MarketDataFetcher:
             Open interest or None if error
         """
         try:
-            ticker = self.exchange.fetch_ticker(symbol)
+            ccxt_symbol = self._to_ccxt_symbol(symbol)
+            ticker = self.exchange.fetch_ticker(ccxt_symbol)
             # OpenInterest might be in different locations depending on exchange response
             return ticker.get("info", {}).get("openInterest")
         except Exception as e:
@@ -255,7 +267,7 @@ if __name__ == "__main__":
 
         # Test 1: Fetch single ticker
         print("Test 1: Fetching BTC ticker...")
-        btc_ticker = fetcher.fetch_ticker("BTC/USD:USD")
+        btc_ticker = fetcher.fetch_ticker("BTC")
         if btc_ticker:
             print(f"  BTC Price: ${btc_ticker['price']:,.2f}")
             print(f"  Bid: ${btc_ticker['bid']:,.2f} | Ask: ${btc_ticker['ask']:,.2f}")
@@ -267,7 +279,7 @@ if __name__ == "__main__":
 
         # Test 2: Fetch OHLCV data
         print("Test 2: Fetching BTC 3-minute OHLCV (last 10 candles)...")
-        btc_ohlcv = fetcher.fetch_ohlcv("BTC/USD:USD", timeframe="3m", limit=10)
+        btc_ohlcv = fetcher.fetch_ohlcv("BTC", timeframe="3m", limit=10)
         if not btc_ohlcv.empty:
             print(f"  Retrieved {len(btc_ohlcv)} candles")
             print("\n  Last 3 candles:")
@@ -288,7 +300,7 @@ if __name__ == "__main__":
 
         # Test 4: Fetch market data bundle
         print("Test 4: Fetching complete market data bundle for ETH...")
-        eth_bundle = fetcher.fetch_market_data_bundle("ETH/USD:USD")
+        eth_bundle = fetcher.fetch_market_data_bundle("ETH")
         if eth_bundle["ticker"]:
             print(f"  ETH Price: ${eth_bundle['ticker']['price']:,.2f}")
             print(f"  Funding Rate: {eth_bundle['funding_rate']}")

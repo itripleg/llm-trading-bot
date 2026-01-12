@@ -307,6 +307,54 @@ class TradingAccount:
 
         return pnl_after_fees
 
+    def check_liquidation(self, current_prices: Dict[str, float]) -> List[str]:
+        """
+        Check all open positions for liquidation conditions.
+        
+        Args:
+            current_prices: Dict of coin -> current price
+            
+        Returns:
+            List of liquidated position IDs
+        """
+        liquidations = []
+        
+        for coin, position in list(self.positions.items()):
+            if coin not in current_prices:
+                continue
+                
+            current_price = current_prices[coin]
+            
+            # Calculate position equity (Margin + PnL)
+            margin = position.get_margin()
+            pnl = position.calculate_pnl(current_price)
+            remaining_equity = margin + pnl
+            
+            # Maintenance Margin Rate (0.5% for >50x, 1% standard)
+            # Higher leverage = tighter liquidation
+            # For 100x: Margin is 1%. Maintenance should be around 0.5%.
+            mm_rate = 0.005 # 0.5%
+            
+            position_value = position.quantity_usd * position.leverage
+            maintenance_margin = position_value * mm_rate
+            
+            # Liquidate if remaining equity is below maintenance margin
+            if remaining_equity <= maintenance_margin:
+                print(f"[LIQUIDATION] Position {position.position_id} liquidated!")
+                print(f"  Coin: {coin}, Leverage: {position.leverage}x")
+                print(f"  Entry: ${position.entry_price}, Current: ${current_price}")
+                print(f"  Equity: ${remaining_equity:.2f} <= Maintenance: ${maintenance_margin:.2f}")
+                
+                # Close position forcibly
+                # In liquidation, user typically loses entire margin (or insurance fund takes over)
+                # We'll assume total loss of margin minus whatever equity is left (which is close to 0)
+                # Actually simpler: Close at current price, realize the huge loss.
+                
+                self.close_position(coin, current_price)
+                liquidations.append(position.position_id)
+                
+        return liquidations
+
     def save_state(self, current_prices: Dict[str, float]):
         """
         Save current account state to database.

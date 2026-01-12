@@ -109,12 +109,12 @@ def print_live_status():
     elif not is_live and account:
         # Paper trading
         print("PAPER TRADING MODE")
-        # For paper, we need to fetch current prices to show accurate PnL
+        # For paper, we need to fetch current prices to show accurate PnL and check liquidations
         fetcher = MarketDataFetcher()
         current_prices = {}
         
         if account.positions:
-            print("\nFetching current prices...")
+            print("\nFetching current prices & checking liquidations...")
             for coin in account.positions:
                 try:
                     df = fetcher.fetch_ohlcv(coin, limit=1)
@@ -122,6 +122,11 @@ def print_live_status():
                         current_prices[coin] = df['close'].iloc[-1]
                 except:
                     pass
+            
+            # Check for liquidations
+            liquidated_ids = account.check_liquidation(current_prices)
+            if liquidated_ids:
+                print(f"[ALERT] {len(liquidated_ids)} positions liquidated during status check!")
         
         summary = account.get_summary(current_prices)
         print(f"Balance: ${summary['balance']:.2f}")
@@ -226,9 +231,8 @@ def get_current_account_state(
                     # For accurate tracking, positions should be logged to DB when opened
                     
                     # Hyperliquid returns short symbols like "ARB", "BTC", "ETH"
-                    # We need to convert to the format used in trading_assets: "BTC/USDC:USDC"
-                    # Hyperliquid perps are quoted in USDC
-                    full_symbol = f"{coin}/USDC:USDC"
+                    # We use simple symbols throughout the app now
+                    full_symbol = coin
                     
                     positions_list.append({
                         'coin': full_symbol,
@@ -322,12 +326,18 @@ def execute_trade(
             print(f"    Leverage: {decision.leverage}x", flush=True)
             print(f"    Price: ${current_price:,.2f}", flush=True)
 
+            # Cap leverage for live trading (safety check)
+            # Hyperliquid max is typically 20x or 50x depending on coin, but definitely not 100x for most
+            safe_leverage = min(int(decision.leverage), 20)
+            if safe_leverage < int(decision.leverage):
+                print(f"    [WARN] Capping leverage from {decision.leverage}x to {safe_leverage}x for live safety", flush=True)
+
             result = executor.market_open_usd(
                 coin=coin,
                 is_buy=is_buy,
                 usd_amount=decision.quantity_usd,
                 current_price=current_price,
-                leverage=int(decision.leverage),
+                leverage=safe_leverage,
                 slippage=0.05  # 5% slippage tolerance
             )
 
@@ -354,7 +364,7 @@ def execute_trade(
                     from datetime import datetime
                     from trading.logger import get_logger
                     trade_logger = get_logger()
-                    position_id = f"{coin.split('/')[0]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                    position_id = f"{coin}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
                     trade_logger.log_position_entry(
                         position_id=position_id,
                         coin=coin,
@@ -448,7 +458,7 @@ def execute_trade(
                     # Position was opened externally or before bot started
                     # Try to get position data from Hyperliquid to calculate real PnL
                     from datetime import datetime
-                    position_id = f"{coin.split('/')[0]}_EXT_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                    position_id = f"{coin}_EXT_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
                     # Fetch position data from exchange
                     position_data = executor.get_position(coin)
@@ -681,6 +691,19 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
             current_prices=current_prices,
             is_live=is_live
         )
+        
+        # Check liquidations for paper trading
+        if not is_live and account and current_prices:
+             liquidations = account.check_liquidation(current_prices)
+             if liquidations:
+                 print(f"\n[LIQUIDATION] {len(liquidations)} positions liquidated!", flush=True)
+                 # Refresh summary again after liquidations
+                 account_summary = get_current_account_state(
+                    executor=executor,
+                    account=account,
+                    current_prices=current_prices,
+                    is_live=is_live
+                )
 
         print(f"\n[ACCOUNT] {'LIVE' if is_live else 'PAPER'} - " +
               f"Balance: ${account_summary['balance']:.2f}, " +
@@ -758,6 +781,10 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
                 except Exception as e:
                     print(f"  [WARN] Could not fetch max leverage for {symbol}: {e}", flush=True)
                     leverage_limits[symbol] = 20  # Safe default
+        else:
+            # For paper trading, allow up to 100x
+             for symbol in market_data.keys():
+                 leverage_limits[symbol] = 100
 
         system_prompt = prompt_builder.get_system_prompt()
         user_prompt = prompt_builder.build_trading_prompt(
@@ -788,18 +815,6 @@ def run_analysis_cycle(account: TradingAccount, start_time: datetime, executor: 
         # Get the coin Claude decided on and its current price
         decision_coin = decision.coin
         decision_price = current_prices.get(decision_coin)
-
-        # If Claude returned a shortened symbol (e.g., "ARB" instead of "ARB/USDC:USDC"),
-        # try to find a match in current_prices
-        if not decision_price:
-            # Try to find a matching symbol that starts with the decision_coin
-            for available_coin in current_prices.keys():
-                if available_coin.startswith(decision_coin + "/"):
-                    print(f"  [INFO] Normalized symbol: {decision_coin} → {available_coin}", flush=True)
-                    decision_coin = available_coin
-                    decision.coin = available_coin  # Update the decision object
-                    decision_price = current_prices[available_coin]
-                    break
 
         if not decision_price:
             print(f"  [ERROR] No market data for {decision_coin}", flush=True)
